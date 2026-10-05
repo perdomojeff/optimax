@@ -2224,7 +2224,7 @@ function prosPdfBlocks(c) {
     L('Tratar probables y posibles como agenda de delineación y recategorización, no como base de compromisos de producción.', 'Treat probable and possible reserves as a delineation and recategorization agenda, not as a basis for production commitments.'),
     L('Obtener libros/datos equivalentes de Occidente (Lago de Maracaibo), Furrial/Melones y la Faja para completar el ranking.', 'Obtain equivalent books/data for Western (Lake Maracaibo), Furrial/Melones and the Belt to complete the ranking.'),
     L('Repetir el cálculo con la ponderación consensuada por el equipo (la herramienta permite ajustarla) y documentar el escenario elegido.', 'Repeat the calculation with the weighting agreed by the team (the tool lets it be adjusted) and document the chosen scenario.')].forEach(function (s) { B.push({ t: 'li', text: s }); });
-  B.push({ t: 'gap', h: 24 }, { t: 'rule', color: [0.3, 0.3, 0.3] }, { t: 'p', bold: true, text: CONSULTANT }, { t: 'meta', text: L('Consultor Senior de Producción Petrolera', 'Senior Oil Production Consultant') });
+  /* sin bloque de firma */
   return B;
 }
 function prosPdfAll(c) {
@@ -2691,7 +2691,7 @@ function fcPdfBlocks(c, ranked, w) {
   FC_OBS.forEach(function (o) { B.push({ t: 'li', text: L(o[0], o[1]) }); });
   B.push({ t: 'h2', text: L('11. Fuentes', '11. Sources') });
   FC_SRC.forEach(function (s, i) { B.push({ t: 'li', text: (i + 1) + '. ' + s[0] + (s[1] ? ' ' + s[1] : '') }); });
-  B.push({ t: 'gap', h: 24 }, { t: 'rule', color: [0.3, 0.3, 0.3] }, { t: 'p', bold: true, text: CONSULTANT }, { t: 'meta', text: L('Consultor Senior de Producción Petrolera', 'Senior Oil Production Consultant') });
+  /* sin bloque de firma */
   return B;
 }
 function fcPdfAll(c, ranked, w) {
