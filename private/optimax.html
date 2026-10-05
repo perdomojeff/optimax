@@ -2227,9 +2227,10 @@ function prosPdfBlocks(c) {
   /* sin bloque de firma */
   return B;
 }
-function prosPdfAll(c) {
+function prosPdfAll(c, lang) {
   var prev = LANG, out = [];
   try {
+    if (lang === 'es' || lang === 'en') { LANG = lang; return prosPdfBlocks(c); }
     LANG = 'es';
     out.push({ t: 'section', label: 'VERSIÓN EN ESPAÑOL' }, { t: 'banner', text: 'VERSIÓN EN ESPAÑOL  ·  Spanish version', color: [0.85, 0.55, 0.05] }, { t: 'gap', h: 4 });
     out = out.concat(prosPdfBlocks(c));
@@ -2295,7 +2296,7 @@ function ProsTab(p) {
   var fieldOpts = [['', L('Todos los campos', 'All fields')]].concat(PROS.fields.map(function (x, i) { return [String(i), x]; }).sort(function (a, b) { return a[1] < b[1] ? -1 : 1; }));
   var kpi = function (lab, val, unit, hint) { return h('div', { className: 'panel p-3', style: { minWidth: 0 } }, h('div', { className: 'eyebrow' }, lab), h('div', { className: 'flex items-baseline gap-1.5 mt-1', style: { flexWrap: 'wrap' } }, h('span', { className: 'kpi' }, val), h('span', { className: 'unit' }, unit)), h('div', { className: 'hint', style: { marginTop: 2 } }, hint)); };
   var th = function (key, lab, right) { return h('th', { key: key, style: { textAlign: right ? 'right' : 'left' } }, key ? h('button', { type: 'button', className: 'lnk', style: { textTransform: 'inherit', letterSpacing: 'inherit', fontWeight: sk === key ? 700 : 500, color: sk === key ? 'var(--accent)' : 'inherit' }, onClick: function () { setSk(key); }, 'aria-label': L('Ordenar por ', 'Sort by ') + lab }, lab + (sk === key ? ' ▾' : '')) : lab); };
-  var doPdf = async function () { setBusy('p'); await p.runExport(function () { var u8 = pdfBuild(prosPdfAll(ctx), { title: 'Prospectividad / Prospectivity · Libro de Reservas 2009 PDVSA Gas Oriente', footer: rptFooter(), pageLabel: 'Página / Page' }); return saveFile('Optimax_Prospectividad_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, L('PDF listo para descargar (español e inglés, resumen ejecutivo y análisis extendido).', 'PDF ready to download (Spanish and English, executive summary and extended analysis).')); setBusy(''); };
+  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(prosPdfAll(ctx, lg), { title: lg === 'es' ? 'Prospectividad · Libro de Reservas 2009 PDVSA Gas Oriente' : 'Prospectivity · 2009 Reserves Book PDVSA Gas Eastern', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Optimax_Prospectividad_' + lg.toUpperCase() + '_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar (resumen ejecutivo y análisis extendido).' : 'English PDF ready to download (executive summary and extended analysis).'); setBusy(''); };
   var doXlsx = async function () { setBusy('x'); await p.runExport(function () { return exportProsXlsx(ctx); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
   var drill = function (e) { setF(Object.assign({}, f, { field: String(e.fi) })); setLevel('res'); setSk('idx'); };
   var sw = 0; PMET.forEach(function (mm) { sw += Math.max(0, +w[mm[0]] || 0); });
@@ -2309,7 +2310,8 @@ function ProsTab(p) {
           h('div', { className: 'eyebrow' }, L('Prospectividad · Libro de Reservas 2009 · PDVSA Gas (Oriente)', 'Prospectivity · 2009 Reserves Book · PDVSA Gas (Eastern Venezuela)')),
           h('p', { className: 'hint', style: { marginTop: 4 } }, L('Jerarquía por campo y por yacimiento con reservas PROBADAS (POES, GOES, producción anual de petróleo y gas, remanentes). Probables y posibles se muestran aparte como potencial adicional. El archivo de referencia externo se muestra solo como contraste y no entra en el índice.', 'Ranking by field and reservoir on PROVED reserves (OOIP, OGIP, annual oil and gas production, remaining). Probable and possible are shown apart as additional potential. The external reference file is shown only as contrast and does not enter the index.'))),
         h('div', { className: 'flex flex-wrap gap-2' },
-          h('button', { type: 'button', className: 'btn2 prim', disabled: !!busy, onClick: doPdf }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Building…') : L('PDF (ES + EN)', 'PDF (ES + EN)')),
+          h('button', { type: 'button', className: 'btn2 prim', disabled: !!busy, onClick: function () { doPdf('es'); } }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Building…') : 'PDF Español'),
+          h('button', { type: 'button', className: 'btn2 prim', disabled: !!busy, onClick: function () { doPdf('en'); } }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Building…') : 'PDF English'),
           h('button', { type: 'button', className: 'btn2', disabled: !!busy, onClick: doXlsx }, h(Icon, { n: 'download', s: 14 }), busy === 'x' ? L('Generando…', 'Building…') : 'Excel'))),
       h('div', { className: 'banner-warn p-3 flex gap-3 items-start', role: 'note' }, h('span', { style: { color: 'var(--warn)' } }, h(Icon, { n: 'alert', s: 18 })),
         h('div', { className: 'hint', style: { minWidth: 0 } }, L('Alcance del Libro: solo PDVSA Gas Oriente (' + PROS.dists.join(' y ') + '). No contiene Occidente (Lago de Maracaibo), Furrial, Melones ni la Faja; datos de 2009 (' + nf(PROS.meta.nSheet) + ' filas; se excluyen ' + nf(PROS.meta.nElim) + ' eliminadas y una fila de totales).', 'Book scope: PDVSA Gas Eastern only (' + PROS.dists.join(' and ') + '). It does not contain Western Venezuela (Lake Maracaibo), Furrial, Melones or the Belt; 2009 data (' + nf(PROS.meta.nSheet) + ' rows; ' + nf(PROS.meta.nElim) + ' eliminated and one totals row are excluded).'))),
@@ -2694,9 +2696,10 @@ function fcPdfBlocks(c, ranked, w) {
   /* sin bloque de firma */
   return B;
 }
-function fcPdfAll(c, ranked, w) {
+function fcPdfAll(c, ranked, w, lang) {
   var prev = LANG, out = [];
   try {
+    if (lang === 'es' || lang === 'en') { LANG = lang; return fcPdfBlocks(c, ranked, w); }
     LANG = 'es';
     out.push({ t: 'section', label: 'VERSIÓN EN ESPAÑOL' }, { t: 'banner', text: 'VERSIÓN EN ESPAÑOL  ·  Spanish version', color: [0.85, 0.55, 0.05] }, { t: 'gap', h: 4 });
     out = out.concat(fcPdfBlocks(c, ranked, w));
@@ -2745,7 +2748,7 @@ function FieldTab(p) {
   var chart = function (k, label) { return scn[k] ? h('div', { className: 'panel p-3', style: { minWidth: 0 } }, h(SceneSvg, { scene: scn[k], label: label })) : null; };
   var tbl = function (heads, rows, right) { return h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' }, h('thead', null, h('tr', null, heads.map(function (x, i) { return h('th', { key: i, style: { textAlign: right && right.indexOf(i) >= 0 ? 'right' : 'left' } }, x); }))), h('tbody', null, rows.map(function (r, i) { return h('tr', { key: i }, r.map(function (v, j) { return h('td', { key: j, className: right && right.indexOf(j) >= 0 ? 'mono' : '', style: { whiteSpace: 'normal', verticalAlign: 'top', textAlign: right && right.indexOf(j) >= 0 ? 'right' : 'left' } }, v); })); })))); };
   var sec = function (title, body, det) { return det ? h('section', { className: 'panel p-4' }, h('details', null, h('summary', { className: 'lnk', style: { cursor: 'pointer' } }, title), h('div', { style: { marginTop: 8 } }, body))) : h('section', { className: 'panel p-4' }, h('div', { className: 'eyebrow mb-2' }, title), body); };
-  var doPdf = async function () { setBusy('p'); await p.runExport(function () { var u8 = pdfBuild(fcPdfAll(c, ranked, w), { title: 'Campo Chimire / Chimire Field · Análisis estratégico / Strategic analysis', footer: rptFooter(), pageLabel: 'Página / Page' }); return saveFile('Optimax_Campo_Chimire_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, L('PDF listo para descargar (español e inglés).', 'PDF ready to download (Spanish and English).')); setBusy(''); };
+  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(fcPdfAll(c, ranked, w, lg), { title: lg === 'es' ? 'Campo Chimire · Análisis estratégico' : 'Chimire Field · Strategic analysis', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Optimax_Campo_Chimire_' + lg.toUpperCase() + '_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.'); setBusy(''); };
   var doXlsx = async function () { setBusy('x'); await p.runExport(function () { return exportFcXlsx(c, ranked, w); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
   var sw = 0; FC_CRIT.forEach(function (k) { sw += Math.max(0, +w[k[0]] || 0); });
   var setRate = function (id, k, v) { var n = Object.assign({}, S); n[id] = Object.assign({}, n[id]); n[id][k] = +v; setS(n); };
@@ -2760,7 +2763,8 @@ function FieldTab(p) {
           h('p', { className: 'hint', style: { marginTop: 4 } }, L('Informe ejecutivo por campo: jerarquía de oportunidades y plan de trabajo de noviembre 2026 a diciembre 2027, combinando el modelo estático del campo con la posición del Libro de Reservas 2009. Aquí se irán agregando los demás campos.', 'Executive report by field: opportunity ranking and work plan from November 2026 to December 2027, combining the field static model with the 2009 Reserves Book position. Other fields will be added here.'))),
         h('div', { className: 'flex flex-wrap items-end gap-2' },
           h('div', { style: { minWidth: 190 } }, h(SelIn, { id: 'fc-field', label: L('Campo', 'Field'), value: 'chimire', onChange: function () { }, options: [['chimire', 'Chimire (Anzoátegui)']] })),
-          h('button', { type: 'button', className: 'btn2 prim', disabled: !!busy, onClick: doPdf }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Building…') : L('Informe PDF (ES + EN)', 'PDF report (ES + EN)')),
+          h('button', { type: 'button', className: 'btn2 prim', disabled: !!busy, onClick: function () { doPdf('es'); } }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Building…') : 'Informe PDF Español'),
+          h('button', { type: 'button', className: 'btn2 prim', disabled: !!busy, onClick: function () { doPdf('en'); } }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Building…') : 'PDF Report English'),
           h('button', { type: 'button', className: 'btn2', disabled: !!busy, onClick: doXlsx }, h(Icon, { n: 'download', s: 14 }), busy === 'x' ? L('Generando…', 'Building…') : 'Excel'))),
       h('div', { className: 'banner-warn p-3 flex gap-3 items-start', role: 'note' }, h('span', { style: { color: 'var(--warn)' } }, h(Icon, { n: 'alert', s: 18 })),
         h('div', { className: 'hint', style: { minWidth: 0 } }, L('Alcance: análisis basado en el modelo estático (Castro y Mederos, 2016), el Libro de Reservas 2009 y un informe de visita de campo (sin cifras medidas por pozo). No hay datos de producción por pozo ni modelo dinámico: las cifras son volúmenes en sitio y remanentes, no pronósticos. Las calificaciones y fechas son juicio preliminar del consultor y son editables.', 'Scope: analysis based on the static model (Castro and Mederos, 2016), the 2009 Reserves Book and a field visit report (no measured per-well figures). There are no per-well production data or dynamic model: figures are in-place and remaining volumes, not forecasts. Scores and dates are the consultant\'s preliminary judgement and are editable.')))),
