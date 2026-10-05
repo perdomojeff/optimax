@@ -1933,7 +1933,7 @@ function sceneParetoH(items, o, th) {
   return { W: W, H: H, prims: P };
 }
 function sceneGantt(tasks, o, th) {
-  var W = 700, LW = 258, RH = 19, top = 58, M = o.months.length, pw = W - LW - 8, P = [], y = top, i, mw = pw / M;
+  var W = 700, LW = 272, RH = 19, top = 58, M = o.months.length, pw = W - LW - 8, P = [], y = top, i, mw = pw / M;
   var gc = o.gcolors, X = function (m) { return LW + m * mw; };
   P.push({ k: 't', x: 4, y: 16, s: o.title, size: 13, bold: true, fill: th.fg });
   if (o.sub) P.push({ k: 't', x: 4, y: 29, s: o.sub, size: 9.5, fill: th.muted });
@@ -1952,7 +1952,7 @@ function sceneGantt(tasks, o, th) {
       o.milestones.forEach(function (m, k) { var mx = X(m.pos), my = yy + 9; P.push({ k: 'g', pts: [[mx, my - 7], [mx + 7, my], [mx, my + 7], [mx - 7, my]], fill: '#d96b6b', stroke: th.bg }); P.push({ k: 't', x: mx, y: my + 3, s: String(k + 1), size: 7.5, bold: true, anchor: 'm', fill: '#ffffff' }); });
       return;
     }
-    P.push({ k: 't', x: 12, y: yy + 13, s: r.l.length > 47 ? r.l.slice(0, 46) + '…' : r.l, size: 10, fill: th.fg });
+    P.push({ k: 't', x: 12, y: yy + 13, s: r.l.length > 53 ? r.l.slice(0, 52) + '…' : r.l, size: 10, fill: th.fg });
     P.push({ k: 'r', x: X(r.a), y: yy + 3, w: Math.max(3, X(r.b) - X(r.a)), h: RH - 7, fill: gc[r.g] });
   });
   return { W: W, H: H, prims: P };
@@ -2389,26 +2389,50 @@ var FC_MONTHS_EN = ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul
 var FC_MLONG = [['noviembre 2026', 'November 2026'], ['diciembre 2026', 'December 2026'], ['enero 2027', 'January 2027'], ['febrero 2027', 'February 2027'], ['marzo 2027', 'March 2027'], ['abril 2027', 'April 2027'], ['mayo 2027', 'May 2027'], ['junio 2027', 'June 2027'], ['julio 2027', 'July 2027'], ['agosto 2027', 'August 2027'], ['septiembre 2027', 'September 2027'], ['octubre 2027', 'October 2027'], ['noviembre 2027', 'November 2027'], ['diciembre 2027', 'December 2027']];
 var FC_G = [['Habilitadores y datos', 'Enablers & data'], ['Modelado', 'Modelling'], ['Ejecución en campo', 'Field execution'], ['Evaluación y decisiones', 'Evaluation & decisions']];
 var FC_GC = ['#8a97a0', '#3b9ec9', '#e08a1e', '#4caf7d'];
+var FC_DISC = [
+  ['PMO / Project Management', 'PMO / Project Management'],
+  ['Asset Management', 'Asset Management'],
+  ['Geología / Geociencias', 'Geology / Geosciences'],
+  ['Geofísica', 'Geophysics'],
+  ['Geoquímica', 'Geochemistry'],
+  ['Petrofísica', 'Petrophysics'],
+  ['Ingeniería de Yacimientos', 'Reservoir Engineering'],
+  ['Producción', 'Production'],
+  ['Perforación / Pozos', 'Drilling / Wells'],
+  ['Facilidades / Infraestructura', 'Facilities / Infrastructure'],
+  ['Data Management / Digital', 'Data Management / Digital'],
+  ['Geomodelado / Simulación', 'Geomodeling / Simulation'],
+  ['QA/QC Técnico', 'Technical QA/QC']
+];
 var FC_TASKS = [
-  { g: 0, a: 0, b: 2, es: 'Data room: producción, presiones y pozos', en: 'Data room: production, pressures and wells' },
-  { g: 0, a: 0.5, b: 2.5, es: 'Reconciliación de reservas vs Libro 2009', en: 'Reserves reconciliation vs 2009 Book' },
-  { g: 0, a: 0, b: 6, es: 'Marco contractual y cumplimiento (OFAC)', en: 'Contract framework and sanctions compliance' },
-  { g: 1, a: 1, b: 5, es: 'Reinterpretación sísmica y modelo estático v2', en: 'Seismic reinterpretation and static model v2' },
-  { g: 1, a: 3, b: 6, es: 'Modelo dinámico v1 (balance de materiales)', en: 'Dynamic model v1 (material balance)' },
-  { g: 1, a: 6, b: 11, es: 'Simulación numérica de yacimientos prioritarios', en: 'Numerical simulation of priority reservoirs' },
-  { g: 2, a: 2, b: 4, es: 'Inventario y selección de candidatos (Cat. 1–3)', en: 'Well inventory and candidate screening (Cat. 1–3)' },
-  { g: 2, a: 3, b: 5, es: 'Ingeniería, materiales y contratación', en: 'Engineering, materials and contracting' },
-  { g: 2, a: 4.5, b: 8.5, es: 'Ola 1: reactivación de pozos cerrados', en: 'Wave 1: reactivation of shut-in wells' },
-  { g: 2, a: 8, b: 12.5, es: 'Ola 2: RA/RC y optimización de pozos activos', en: 'Wave 2: workovers/recompletions and optimization' },
-  { g: 2, a: 8.5, b: 11.5, es: 'Pozo vertical de evaluación (Zona 1 + 2/3)', en: 'Vertical appraisal well (Zone 1 + 2/3)' },
-  { g: 3, a: 7, b: 11.5, es: 'Screening EOR: agua / polímero / gas', en: 'EOR screening: water / polymer / gas' },
-  { g: 3, a: 6, b: 10, es: 'Estudio de monetización de gas y condensado', en: 'Gas and condensate monetization study' },
-  { g: 0, a: 0, b: 3, es: 'Evaluación del plan PDVSA y propuesta CPP', en: 'Assessment of PDVSA plan and CPP proposal' },
-  { g: 2, a: 2, b: 5, es: 'Rehabilitación de estación CHED-4 y seguridad', en: 'CHED-4 station rehabilitation and security' },
-  { g: 3, a: 2, b: 14, es: 'Seguimiento de KPI y reporte mensual', en: 'KPI tracking and monthly reporting' }
+  { g: 0, a: 0, b: 2, d: 10, es: 'Datapack: producción, presiones y pozos', en: 'Datapack: production, pressures and wells' },
+  { g: 0, a: 0.5, b: 2.5, d: 6, es: 'Reconciliación de reservas vs Libro 2009', en: 'Reserves reconciliation vs 2009 Book' },
+  { g: 0, a: 0, b: 6, d: 1, es: 'Marco contractual y cumplimiento (OFAC)', en: 'Contract framework and sanctions compliance', x: 1 },
+  { g: 0, a: 0, b: 14, d: 0, es: 'Gobernanza del proyecto: PMO, riesgos y cronograma', en: 'Project governance: PMO, risks and schedule', x: 1 },
+  { g: 0, a: 1, b: 4, d: 1, es: 'Plan de negocio, portafolio y presupuesto 2027', en: 'Business plan, portfolio and 2027 budget' },
+  { g: 0, a: 0, b: 3, d: 1, es: 'Evaluación del plan PDVSA y propuesta CPP', en: 'Assessment of PDVSA plan and CPP proposal' },
+  { g: 0, a: 1, b: 6, d: 10, es: 'Gobierno de datos y repositorio digital', en: 'Data governance and digital repository' },
+  { g: 1, a: 1, b: 3.5, d: 3, es: 'Reprocesamiento y reinterpretación sísmica 3D', en: '3D seismic reprocessing and reinterpretation' },
+  { g: 1, a: 1, b: 4, d: 2, es: 'Revisión geológica: correlación y mapas de arenas', en: 'Geological review: correlation and sand maps' },
+  { g: 1, a: 1, b: 4, d: 5, es: 'Petrofísica: registros, saturaciones y cutoffs', en: 'Petrophysics: logs, saturations and cutoffs' },
+  { g: 1, a: 2, b: 6, d: 4, es: 'Geoquímica de fluidos y compartimentalización', en: 'Fluid geochemistry and compartmentalization' },
+  { g: 1, a: 3, b: 5, d: 11, es: 'Modelo estático v2 (geología, sísmica, petrofísica)', en: 'Static model v2 (geology, seismic, petrophysics)' },
+  { g: 1, a: 3, b: 6, d: 6, es: 'Modelo dinámico v1 (balance de materiales)', en: 'Dynamic model v1 (material balance)' },
+  { g: 1, a: 6, b: 11, d: 11, es: 'Simulación numérica de yacimientos prioritarios', en: 'Numerical simulation of priority reservoirs' },
+  { g: 2, a: 2, b: 4, d: 7, es: 'Inventario y selección de candidatos (Cat. 1–3)', en: 'Well inventory and candidate screening (Cat. 1–3)' },
+  { g: 2, a: 1, b: 4, d: 9, es: 'Diagnóstico de facilidades e infraestructura', en: 'Facilities and infrastructure assessment' },
+  { g: 2, a: 3, b: 5, d: 8, es: 'Ingeniería, materiales y contratación', en: 'Engineering, materials and contracting' },
+  { g: 2, a: 4.5, b: 8.5, d: 7, es: 'Ola 1: reactivación de pozos cerrados', en: 'Wave 1: reactivation of shut-in wells' },
+  { g: 2, a: 8, b: 12.5, d: 8, es: 'Ola 2: RA/RC y optimización de pozos activos', en: 'Wave 2: workovers/recompletions and optimization' },
+  { g: 2, a: 8.5, b: 11.5, d: 8, es: 'Pozo vertical de evaluación (Zona 1 + 2/3)', en: 'Vertical appraisal well (Zone 1 + 2/3)' },
+  { g: 2, a: 2, b: 5, d: 9, es: 'Rehabilitación de estación CHED-4 y seguridad', en: 'CHED-4 station rehabilitation and security' },
+  { g: 3, a: 7, b: 11.5, d: 6, es: 'Screening EOR: agua / polímero / gas', en: 'EOR screening: water / polymer / gas' },
+  { g: 3, a: 6, b: 10, d: 1, es: 'Estudio de monetización de gas y condensado', en: 'Gas and condensate monetization study' },
+  { g: 3, a: 3, b: 12, d: 12, es: 'QA/QC técnico: revisión por pares', en: 'Technical QA/QC: peer review' },
+  { g: 3, a: 2, b: 14, d: 0, es: 'Seguimiento de KPI y reporte mensual', en: 'KPI tracking and monthly reporting', x: 1 }
 ];
 var FC_MS = [
-  { pos: 2, es: 'Data room completo y línea base de reservas acordada', en: 'Data room complete and reserves baseline agreed' },
+  { pos: 2, es: 'Datapack completo y línea base de reservas acordada', en: 'Datapack complete and reserves baseline agreed' },
   { pos: 4, es: 'Candidatos de la ola 1 aprobados', en: 'Wave 1 candidates approved' },
   { pos: 5.5, es: 'Primera producción incremental (ola 1)', en: 'First incremental production (wave 1)' },
   { pos: 6, es: 'Modelo dinámico v1 entregado', en: 'Dynamic model v1 delivered' },
@@ -2428,7 +2452,7 @@ var FC_OPP = [
   { id: 'O9', es: 'Alternativa del aspirante a CPP: perforación en arenas de 30–70 pies + refinería modular', en: 'CPP applicant alternative: drilling 30–70 ft sands + modular refinery', hz: ['Medio: estructuración desde mar 2027', 'Medium: structuring from Mar 2027'], s: { V: 4, S: 3, E: 2, C: 2, D: 1 } }
 ];
 var FC_ENAB = [
-  { id: 'H1', es: 'Data room de producción, presiones, pruebas y estado mecánico por pozo', en: 'Data room: per-well production, pressures, tests and mechanical status', when: ['nov–dic 2026', 'Nov–Dec 2026'], why: ['Sin historial de producción no hay curvas de declinación ni modelo dinámico; es el cuello de botella de todo el plan.', 'Without production history there are no decline curves or dynamic model; it is the bottleneck of the whole plan.'] },
+  { id: 'H1', es: 'Datapack de producción, presiones, pruebas y estado mecánico por pozo', en: 'Datapack: per-well production, pressures, tests and mechanical status', when: ['nov–dic 2026', 'Nov–Dec 2026'], why: ['Sin historial de producción no hay curvas de declinación ni modelo dinámico; es el cuello de botella de todo el plan.', 'Without production history there are no decline curves or dynamic model; it is the bottleneck of the whole plan.'] },
   { id: 'H2', es: 'Reconciliación de reservas vigentes frente al Libro 2009', en: 'Reconciliation of current reserves against the 2009 Book', when: ['dic 2026–ene 2027', 'Dec 2026–Jan 2027'], why: ['El Libro es de 2009 y contiene remanentes negativos por revisión; la línea base debe acordarse con la Dirección antes de comprometer metas.', 'The Book dates from 2009 and contains negative remaining volumes from revisions; the baseline must be agreed with the Directorate before committing targets.'] },
   { id: 'H3', es: 'Marco contractual y cumplimiento de sanciones', en: 'Contract framework and sanctions compliance', when: ['nov 2026–jun 2027', 'Nov 2026–Jun 2027'], why: ['Cualquier participación de terceros depende del esquema contractual (CPP) y de las licencias OFAC vigentes; es la ruta crítica de la ejecución con socios.', 'Any third-party participation depends on the contract scheme (CPP) and the OFAC licences in force; it is the critical path for execution with partners.'] },
   { id: 'H4', es: 'Modelo dinámico (balance de materiales, luego simulación)', en: 'Dynamic model (material balance, then simulation)', when: ['feb–sep 2027', 'Feb–Sep 2027'], why: ['Convierte el modelo estático en pronósticos de producción y reservas recuperables; hoy no existe en la documentación disponible.', 'Turns the static model into production and recoverable-reserves forecasts; it does not exist in the available documentation.'] },
@@ -2558,14 +2582,14 @@ function fcExec(c, ranked) {
   B.push(L('Concentración: tres yacimientos (' + t3.map(function (x) { return x.name + ' (' + x.field + ')'; }).join(', ') + ') reúnen ' + nf(t3s / (T.rem0 || 1) * 100, 0) + '% del remanente líquido; ' + c.n80 + ' de ' + c.list.length + ' yacimientos reúnen el 80%. El esfuerzo debe empezar por ellos.', 'Concentration: three reservoirs (' + t3.map(function (x) { return x.name + ' (' + x.field + ')'; }).join(', ') + ') hold ' + nf(t3s / (T.rem0 || 1) * 100, 0) + '% of the remaining liquid; ' + c.n80 + ' of ' + c.list.length + ' reservoirs hold 80%. Effort should start with them.'));
   B.push(L('Posición en la prospectividad del Libro: Chimire ocupa el puesto ' + rk.rank + ' de ' + c.nBase + ' campos (índice ' + nf(rk.idx, 1) + ', prioridad P' + rk.tier + ') y el ' + rk.rankLiq + ' por remanente de líquido; Chimire R, Central y Norte están en los puestos ' + c.ranks.filter(function (x) { return x.name !== 'CHIMIRE'; }).map(function (x) { return x.name.replace('CHIMIRE ', '') + ' ' + x.rank; }).join(', ') + '.', 'Position in the Book prospectivity ranking: Chimire ranks ' + rk.rank + ' of ' + c.nBase + ' fields (index ' + nf(rk.idx, 1) + ', priority P' + rk.tier + ') and ' + rk.rankLiq + ' by remaining liquid; Chimire R, Central and Norte rank ' + c.ranks.filter(function (x) { return x.name !== 'CHIMIRE'; }).map(function (x) { return x.name.replace('CHIMIRE ', '') + ' ' + x.rank; }).join(', ') + '.'));
   B.push(L('Modelo estático (Castro y Mederos, 2016): 81 pozos, 10 eventos estratigráficos y la falla Tascabaña definen tres prospectos exploratorios con POES medio conjunto de ~' + nf(c.protoSum / 1e6, 1) + ' MMBN, equivalente al ' + nf(c.protoSum / (T.poes || 1) * 100, 1) + '% del POES probado de la familia. La exploración no es la palanca principal: el valor está en los yacimientos ya conocidos.', 'Static model (Castro and Mederos, 2016): 81 wells, 10 stratigraphic events and the Tascabaña fault define three exploration prospects with a combined mean OOIP of ~' + nf(c.protoSum / 1e6, 1) + ' MMSTB, equal to ' + nf(c.protoSum / (T.poes || 1) * 100, 1) + '% of the proved OOIP of the family. Exploration is not the main lever: the value lies in the already known reservoirs.'));
-  B.push(L('Prioridades: ' + ranked.slice(0, 3).map(function (x) { return x.o.id + ' ' + x.o.es + ' (' + nf(x.score, 0) + ')'; }).join('; ') + '. Antes de comprometer metas se requieren cuatro habilitadores: data room, reconciliación de reservas, marco contractual y modelo dinámico.', 'Priorities: ' + ranked.slice(0, 3).map(function (x) { return x.o.id + ' ' + x.o.en + ' (' + nf(x.score, 0) + ')'; }).join('; ') + '. Four enablers are required before committing targets: data room, reserves reconciliation, contract framework and dynamic model.'));
+  B.push(L('Prioridades: ' + ranked.slice(0, 3).map(function (x) { return x.o.id + ' ' + x.o.es + ' (' + nf(x.score, 0) + ')'; }).join('; ') + '. Antes de comprometer metas se requieren cuatro habilitadores: datapack, reconciliación de reservas, marco contractual y modelo dinámico.', 'Priorities: ' + ranked.slice(0, 3).map(function (x) { return x.o.id + ' ' + x.o.en + ' (' + nf(x.score, 0) + ')'; }).join('; ') + '. Four enablers are required before committing targets: datapack, reserves reconciliation, contract framework and dynamic model.'));
   B.push(L('Plan: de noviembre de 2026 a diciembre de 2027 (14 meses). Primera producción incremental prevista en abril de 2027 (ola 1), modelo dinámico v1 a fines de abril, pozo de evaluación probado en octubre y decisión sobre piloto EOR en diciembre. Las fechas son una propuesta preliminar, condicionada a datos, licencias y capacidad de ejecución.', 'Plan: November 2026 to December 2027 (14 months). First incremental production planned for April 2027 (wave 1), dynamic model v1 at the end of April, appraisal well tested in October and an EOR pilot decision in December. Dates are a preliminary proposal, conditional on data, licences and execution capacity.'));
   B.push(L('Límites: análisis basado en el modelo estático, el Libro 2009 y el informe de visita de campo (sin cifras medidas por pozo); no hay datos de producción por pozo ni modelo dinámico. Las cifras son volúmenes en sitio y remanentes, no pronósticos de producción; las calificaciones de oportunidades son juicio del consultor, ajustables.', 'Limits: analysis based on the static model, the 2009 Book and the field visit report (no measured per-well figures); there are no per-well production data or dynamic model. Figures are in-place and remaining volumes, not production forecasts; opportunity scores are the consultant\'s judgement and adjustable.'));
   return B;
 }
 function fcMonths(tasks) {
   return FC_MLONG.map(function (nm, m) {
-    var act = tasks.filter(function (t) { return t.a < m + 1 - 1e-9 && t.b > m + 1e-9 && t.es.indexOf('Seguimiento') !== 0 && t.es.indexOf('Marco contractual') !== 0; }), ms = FC_MS.filter(function (x) { return x.pos > m + 1e-9 && x.pos <= m + 1 + 1e-9; });
+    var act = tasks.filter(function (t) { return t.a < m + 1 - 1e-9 && t.b > m + 1e-9 && !t.x; }), ms = FC_MS.filter(function (x) { return x.pos > m + 1e-9 && x.pos <= m + 1 + 1e-9; });
     return { m: m, name: LANG === 'es' ? nm[0] : nm[1], act: act.map(function (t) { return fl(t); }), ms: ms.map(function (x) { return fl(x); }) };
   });
 }
@@ -2673,7 +2697,10 @@ function fcPdfBlocks(c, ranked, w) {
   B.push({ t: 'h3', text: L('Actividades por mes', 'Activities by month') });
   B.push({ t: 'table', sz: 7, cols: pCols([[L('Mes', 'Month'), 15], [L('Actividades en curso', 'Ongoing activities'), 62], [L('Hitos del mes', 'Milestones this month'), 23]]),
     rows: fcMonths(FC_TASKS).map(function (r) { return [r.name, r.act.join('; '), r.ms.length ? r.ms.join('; ') : '–']; }) });
-  B.push({ t: 'meta', text: L('Se omiten del detalle mensual las actividades transversales (seguimiento y marco contractual, que cubren todo el período). Fechas preliminares, condicionadas a datos, licencias y capacidad de ejecución.', 'Cross-cutting activities (tracking and contract framework, covering the whole period) are omitted from the monthly detail. Dates are preliminary, conditional on data, licences and execution capacity.') });
+  B.push({ t: 'h3', text: L('Cobertura por disciplina', 'Coverage by discipline') });
+  B.push({ t: 'table', sz: 7.4, cols: pCols([[L('Disciplina', 'Discipline'), 28], [L('Actividades del cronograma', 'Schedule activities'), 72]]),
+    rows: FC_DISC.map(function (d, k) { return [L(d[0], d[1]), FC_TASKS.filter(function (t) { return t.d === k; }).map(function (t) { return fl(t); }).join('; ')]; }) });
+  B.push({ t: 'meta', text: L('Se omiten del detalle mensual las actividades transversales (seguimiento de KPI, gobernanza del proyecto y marco contractual, que cubren todo el período). Fechas preliminares, condicionadas a datos, licencias y capacidad de ejecución.', 'Cross-cutting activities (KPI tracking, project governance and contract framework, covering the whole period) are omitted from the monthly detail. Dates are preliminary, conditional on data, licences and execution capacity.') });
   B.push({ t: 'h2', text: L('8. Riesgos y supuestos', '8. Risks and assumptions') });
   [L('Estado de las instalaciones: el informe de visita reporta la estación CHED-4 vandalizada y el resto del campo en condiciones similares; sin facilidades no hay venta de crudo en especificación y los costos de rehabilitación y seguridad pueden superar lo previsto.', 'Facility condition: the visit report states that station CHED-4 is vandalized and the rest of the field is in similar condition; without facilities there is no on-spec crude sales and rehabilitation and security costs may exceed expectations.'),
     L('Bajo potencial por pozo y agua: el 85% de los pozos tendría un máximo de 100 BFPD y el único pozo activo produce casi agua libre; la meta de 8.000 BNPD depende de pozos de 30–70 BNPD netos.', 'Low per-well potential and water: 85% of the wells would have a maximum of 100 BFPD and the single active well produces almost free water; the 8,000 BOPD target depends on wells of 30–70 net BOPD.'),
@@ -2713,8 +2740,8 @@ async function exportFcXlsx(c, ranked, w) {
   var name = 'Optimax_Campo_Chimire_' + today();
   var oh = ['#', 'ID', 'Oportunidad / Opportunity', 'Puntaje / Score', 'Prioridad / Priority', 'Horizonte / Horizon', 'V', 'S', 'E', 'C', 'D'];
   var orows = ranked.map(function (x) { return [x.rank, x.o.id, x.o.es + ' / ' + x.o.en, Math.round(x.score * 10) / 10, ['Alta / High', 'Media / Medium', 'Baja / Low'][x.tier - 1], x.o.hz[0] + ' / ' + x.o.hz[1], x.o.s.V, x.o.s.S, x.o.s.E, x.o.s.C, x.o.s.D]; });
-  var gh = ['Grupo / Group', 'Actividad / Activity', 'Inicio / Start', 'Fin / End'], mlab = function (p, end) { var m = Math.min(13, Math.max(0, end ? Math.ceil(p - 1e-9) - 1 : Math.floor(p + 1e-9))); return FC_MLONG[m][0] + ' / ' + FC_MLONG[m][1]; };
-  var grows = FC_TASKS.map(function (t) { return [FC_G[t.g][0] + ' / ' + FC_G[t.g][1], t.es + ' / ' + t.en, mlab(t.a, false), mlab(t.b, true)]; });
+  var gh = ['Grupo / Group', 'Disciplina / Discipline', 'Actividad / Activity', 'Inicio / Start', 'Fin / End'], mlab = function (p, end) { var m = Math.min(13, Math.max(0, end ? Math.ceil(p - 1e-9) - 1 : Math.floor(p + 1e-9))); return FC_MLONG[m][0] + ' / ' + FC_MLONG[m][1]; };
+  var grows = FC_TASKS.map(function (t) { return [FC_G[t.g][0] + ' / ' + FC_G[t.g][1], FC_DISC[t.d][0] + ' / ' + FC_DISC[t.d][1], t.es + ' / ' + t.en, mlab(t.a, false), mlab(t.b, true)]; });
   var rh = ['#', 'Yacimiento', 'Campo', 'Fluido', 'API', 'POES (BN)', 'Acum. (BN)', 'Rem. líquido (BN)', 'Rem. gas (MPC)', 'Prod. anual (BN)'];
   var rrows = c.list.map(function (x, i) { return [i + 1, x.name, x.field, x.hc, x.api, Math.round(x.poes), Math.round(x.acum), Math.round(x.rem0), Math.round(x.remg0), Math.round(x.pa)]; });
   var X = null; try { X = await loadExcel(); } catch (e) { X = null; }
@@ -2726,7 +2753,7 @@ async function exportFcXlsx(c, ranked, w) {
   var plr = [['Pozos / Wells', V.w1, V.w2, P.wT], ['Meta BNPD / Target BOPD', V.q1, V.q2, P.qT], ['BNPD por pozo / BOPD per well', Math.round(P.q1w), Math.round(P.q2w), Math.round(P.qTw)], ['Capex MM$ (380 ambas fases; Fase 1 prorrata por pozos) / Capex US$ MM', Math.round(P.c1 / 1e6), '', 380], ['Capex por BNPD US$ / Capex per BOPD', Math.round(P.c1b), '', Math.round(P.cpb)]].concat(P.pb.map(function (r) { return ['Recuperación simple años a netback ' + r.nb + ' US$/bbl (ilustrativo) / Simple payback years', Math.round(r.p1 * 10) / 10, '', Math.round(r.pt * 10) / 10]; }));
   mk('Oportunidades', oh, orows, [5, 6, 70, 12, 16, 36, 5, 5, 5, 5, 5]);
   mk('Plan PDVSA (visita)', plh, plr, [70, 16, 16, 12]);
-  mk('Plan nov26-dic27', gh, grows, [34, 64, 28, 28]);
+  mk('Plan nov26-dic27', gh, grows, [34, 34, 64, 28, 28]);
   mk('Yacimientos Libro', rh, rrows, [6, 18, 18, 8, 8, 16, 16, 16, 16, 16]);
   var buf = await wb.xlsx.writeBuffer();
   await saveFile(name + '.xlsx', new Blob([buf], { type: XLSX_MIME })); return 'xlsx';
