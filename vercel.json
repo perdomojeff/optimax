@@ -1,0 +1,4 @@
+{
+  "outputDirectory": "public",
+  "functions": { "api/app.js": { "includeFiles": "private/**", "maxDuration": 15 } }
+}

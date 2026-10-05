@@ -1,0 +1,31 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Optimax · Acceso</title>
+<style>body{margin:0;background:#0f1a24;color:#e6edf2;font:15px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
+.c{width:min(380px,92vw);background:#14202b;border:1px solid #2c3e4c;border-radius:12px;padding:26px}
+h1{margin:0 0 4px;font-size:26px;letter-spacing:.5px}p{color:#9fb0bd;margin:0 0 16px;font-size:13px}
+input{width:100%;box-sizing:border-box;margin:6px 0 12px;padding:10px;border-radius:7px;border:1px solid #2c3e4c;background:#0f1a24;color:#fff;font-size:15px}
+button{width:100%;padding:11px;border:0;border-radius:7px;background:#e08a1e;color:#111;font-weight:700;font-size:15px;cursor:pointer}
+a{color:#e08a1e;cursor:pointer;font-size:13px}#m{margin-top:12px;font-size:13px;color:#ffb74d;min-height:18px}</style></head>
+<body><div class="c"><h1>OPTIMAX</h1><p>Análisis y reactivación de pozos · acceso del equipo</p>
+<form id="f"><label>Correo</label><input id="e" type="email" required autocomplete="email"><label>Contraseña</label><input id="p" type="password" required minlength="8" autocomplete="current-password">
+<button id="b">Entrar</button></form><div style="margin-top:10px;display:flex;justify-content:space-between"><a id="t">Crear cuenta</a><a id="r">Olvidé mi contraseña</a></div><div id="m"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+var SB_URL='https://gwczlpofvxihdsvzggcg.supabase.co',SB_KEY='sb_publishable_XOPuvRPfmwc3dstJGjTbOg_L2yKFCxb';
+var sb=supabase.createClient(SB_URL,SB_KEY),mode='in',$=function(i){return document.getElementById(i)};
+function msg(t){$('m').textContent=t}
+$('t').onclick=function(){mode=mode==='in'?'up':'in';$('b').textContent=mode==='in'?'Entrar':'Crear cuenta';$('t').textContent=mode==='in'?'Crear cuenta':'Ya tengo cuenta';msg('')};
+$('r').onclick=async function(){var e=$('e').value;if(!e){msg('Escribe tu correo arriba.');return}var r=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin});msg(r.error?r.error.message:'Te enviamos un enlace para restablecer la contraseña.')};
+$('f').onsubmit=async function(ev){ev.preventDefault();msg('...');var e=$('e').value,p=$('p').value,r;
+ if(mode==='up'){r=await sb.auth.signUp({email:e,password:p,options:{emailRedirectTo:location.origin}});if(r.error)return msg(r.error.message);if(!r.data.session)return msg('Cuenta creada. Confirma tu correo y luego entra. El administrador debe aprobar tu acceso.')}
+ else{r=await sb.auth.signInWithPassword({email:e,password:p});if(r.error)return msg(r.error.message)}
+ boot()};
+async function boot(){
+ var s=(await sb.auth.getSession()).data.session;if(!s)return;msg('Cargando...');
+ var u=s.user,pr=await sb.from('profiles').select('role,activo').eq('user_id',u.id).maybeSingle();
+ if(!pr.data||!pr.data.activo){msg('Tu cuenta está pendiente de aprobación por el administrador.');return}
+ var res=await fetch('/api/app',{headers:{Authorization:'Bearer '+s.access_token}});
+ if(!res.ok){msg('No se pudo cargar la aplicación ('+res.status+').');return}
+ var html=await res.text();window.__sb=sb;window.OPT_ROLE=pr.data.role;window.OPT_USER={id:u.id,email:u.email};
+ document.open();document.write(html);document.close()}
+boot();
+</script></body></html>
