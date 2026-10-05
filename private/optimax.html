@@ -146,7 +146,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
   var tx = document.createElement('span'); tx.textContent = (me.email || '') + ' · ' + role; bar.appendChild(tx);
   function btn(t, f) { var b = document.createElement('button'); b.textContent = t; b.style.cssText = 'background:#e08a1e;color:#111;border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px IBM Plex Sans,sans-serif'; b.onclick = f; bar.appendChild(b); return b; }
   btn('Salir', async function () { await sb.auth.signOut(); location.reload(); });
-  if (role === 'admin' && window.__getPROS) {
+  if (role === 'admin') {
     sb.from('fact_reservas').select('reserva_key', { count: 'exact', head: true }).then(function (r) {
       if (r.error || r.count > 0) return;
       var b = btn('Cargar Libro 2009 a la base', async function () {
