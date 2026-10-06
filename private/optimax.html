@@ -107,7 +107,13 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
 @keyframes bnSpin { to { transform: rotate(360deg); } }
 @keyframes bnFlick { from { transform: scale(.92, .8); opacity: .85; } to { transform: scale(1.05, 1.12); opacity: 1; } }
 .bn .pill { position: absolute; left: 22px; bottom: 14px; z-index: 2; background: rgba(10,17,20,.72); }
-@media (max-width: 640px) { .bn { padding: 14px 14px 46px; min-height: 0; } .bn .pill { left: 14px; bottom: 12px; } .bn-art { width: 100%; opacity: .22; } }
+@media (max-width: 640px) {
+  .bn { padding: 14px 14px 12px; min-height: 0; }
+  .bn > :last-child { display: contents; }
+  .bn > :last-child > :first-child { order: 1; }
+  .bn-art { position: relative; order: 2; flex: 0 0 100%; width: auto; height: 120px; margin: 6px -14px 0; opacity: 1; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 10%); mask-image: linear-gradient(to right, transparent 0, #000 10%); }
+  .bn .pill { position: static; order: 3; margin-top: 10px; }
+}
 @media (prefers-reduced-motion: reduce) { .bn-beam, .bn-rod, .bn-crank, .bn-flame { animation: none; } }
 </style>
 <div id="root"></div>
