@@ -1634,26 +1634,19 @@ async function exportTimeXlsx(list, who, from, to) {
   await saveFile(name + '.xlsx', new Blob([buf], { type: XLSX_MIME })); return 'xlsx';
 }
 
-function timePdfAll(list, who, from, to) {
+function timePdfAll(list, who, from, to, lang) {
   var prev = LANG, out = [];
   var pend = list.filter(function (e) { return !trOK(e); }).length;
   try {
-    LANG = 'es';
-    out.push({ t: 'section', label: 'VERSIÓN EN ESPAÑOL' }, { t: 'banner', text: 'VERSIÓN EN ESPAÑOL  ·  Spanish version', color: [0.85, 0.55, 0.05] },
-      { t: 'meta', text: 'Este informe contiene la misma información en español e inglés dentro de este archivo. La versión en inglés (ENGLISH VERSION) sigue a continuación.' }, { t: 'gap', h: 4 });
+    LANG = lang === 'en' ? 'en' : 'es';
     out = out.concat(timePdfBlocks(list, who, from, to));
-    LANG = 'en';
-    out.push({ t: 'section', label: 'ENGLISH VERSION' }, { t: 'banner', text: 'ENGLISH VERSION  ·  Versión en inglés', color: [0.15, 0.45, 0.7] },
-      { t: 'meta', text: 'This report contains the same information in Spanish and English within this file. The Spanish version (VERSIÓN EN ESPAÑOL) appears first.' }, { t: 'gap', h: 4 });
-    out = out.concat(timePdfBlocks(list, who, from, to));
-    if (pend) out.push({ t: 'meta', text: '* ' + pend + ' entries are shown in the original Spanish (not yet translated).' });
+    if (LANG === 'en' && pend) out.push({ t: 'meta', text: '* ' + pend + ' entries are shown in the original Spanish (not yet translated).' });
   } finally { LANG = prev; }
   return out;
 }
 function timePdfBlocks(list, who, from, to) {
   var st = tlStats(list), B = [];
   B.push({ t: 'h1', text: L('Registro de tiempo del consultor', 'Consultant time log') });
-  B.push({ t: 'p', bold: true, text: L('Consultor Senior: ', 'Senior Consultant: ') + who });
   B.push({ t: 'meta', text: L('Proyecto: Plan Acelerado de Recuperación de Producción (Venezuela 2027)', 'Project: Accelerated Production Recovery Plan (Venezuela 2027)') });
   B.push({ t: 'meta', text: L('Período: ', 'Period: ') + tlPeriod(list, from, to) + ' · ' + L('Emitido: ', 'Issued: ') + today() });
   B.push({ t: 'rule' });
@@ -1666,7 +1659,6 @@ function timePdfBlocks(list, who, from, to) {
   B.push({ t: 'h2', text: L('Detalle de actividades', 'Activity detail') });
   B.push({ t: 'table', cols: [{ label: L('Fecha', 'Date'), w: 0.11 }, { label: L('Inicio', 'Start'), w: 0.07 }, { label: L('Fin', 'End'), w: 0.07 }, { label: L('Horas', 'Hours'), w: 0.07, r: true }, { label: L('Actividad ejecutada', 'Activity performed'), w: 0.5 }, { label: L('Referencia', 'Reference'), w: 0.18 }],
     rows: list.map(function (e) { return [fmtDay(e.date), e.start, e.end, nf(tlHours(e), 2), actShown(e) + (LANG === 'en' && !trOK(e) ? ' *' : ''), refShown(e)]; }), total: ['', '', 'TOTAL', nf(st.total, 2), '', ''] });
-  B.push({ t: 'gap', h: 28 }, { t: 'rule', color: [0.3, 0.3, 0.3] }, { t: 'p', bold: true, text: who }, { t: 'meta', text: L('Consultor Senior de Producción Petrolera', 'Senior Oil Production Consultant') });
   return B;
 }
 
@@ -1752,13 +1744,14 @@ function TimeLog(p) {
   var edit = function (e) { setEditId(e.id); setF({ date: e.date, start: e.start, end: e.end, activity: e.activity, ref: e.ref || '' }); setErr(''); };
   var cancel = function () { setEditId(''); setF({ date: today(), start: '08:00', end: '17:00', activity: '', ref: '' }); setErr(''); };
   var doXlsx = async function () { setBusy('x'); var pend = list.filter(function (e) { return !trOK(e); }), eff = list; if (pend.length && smp) { var rr = await runTranslate(pend); eff = list.map(function (e) { return rr.map[e.id] ? Object.assign({}, e, rr.map[e.id]) : e; }); } await p.runExport(function () { return exportTimeXlsx(eff, who, from, to); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
-  var doPdf = async function () {
+  var doPdf = async function (lg) {
     setBusy('p');
     var pend = list.filter(function (e) { return !trOK(e); }), eff = list;
-    if (pend.length && smp) { var rr = await runTranslate(pend); eff = list.map(function (e) { return rr.map[e.id] ? Object.assign({}, e, rr.map[e.id]) : e; }); }
-    await p.runExport(function () { var u8 = pdfBuild(timePdfAll(eff, who, from, to), { title: 'Registro de tiempo / Time log · ' + who, footer: 'Optimax · ' + who + ' · Consultor Senior / Senior Consultant', pageLabel: 'Página / Page' }); return saveFile('Optimax_Tiempo_Consultor_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, L('PDF listo para descargar (español e inglés).', 'PDF ready to download (Spanish and English).'));
+    if (lg === 'en' && pend.length && smp) { var rr = await runTranslate(pend); eff = list.map(function (e) { return rr.map[e.id] ? Object.assign({}, e, rr.map[e.id]) : e; }); }
+    await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(timePdfAll(eff, who, from, to, lg), { title: lg === 'es' ? 'Registro de tiempo' : 'Time log', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Optimax_Tiempo_Consultor_' + lg.toUpperCase() + '_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.');
     setBusy('');
   };
+
   var card = function (label, val, unit) { return h('div', { className: 'panel p-4', style: { minWidth: 0 } }, h('div', { className: 'eyebrow' }, label), h('div', { className: 'big' }, val, unit ? h('span', { className: 'unit', style: { marginLeft: 8, fontSize: 12 } }, unit) : null)); };
   return h('div', { className: 'flex flex-col gap-4' },
     h('section', { className: 'panel p-4 flex flex-col gap-3' },
@@ -1782,7 +1775,7 @@ function TimeLog(p) {
       h('button', { type: 'button', className: 'btn2', onClick: function () { setFrom(''); setTo(''); } }, L('Todo el período', 'All time')),
       smp && pending.length ? h('button', { type: 'button', className: 'btn2', disabled: !!trMsg && /…$/.test(trMsg), onClick: function () { runTranslate(pending); } }, L('Traducir al inglés (', 'Translate to English (') + pending.length + ')') : null,
       h('button', { type: 'button', className: 'btn2 prim', disabled: !list.length || !!busy, onClick: doXlsx }, h(Icon, { n: 'download', s: 14 }), busy === 'x' ? L('Generando…', 'Generating…') : L('Exportar Excel', 'Export Excel')),
-      h('button', { type: 'button', className: 'btn2 prim', disabled: !list.length || !!busy, onClick: doPdf }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Generating…') : L('Imprimir PDF', 'Print PDF'))),
+      h('button', { type: 'button', className: 'btn2 prim', disabled: !list.length || !!busy, onClick: function () { doPdf('es'); } }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Generating…') : 'PDF Español'), h('button', { type: 'button', className: 'btn2 prim', disabled: !list.length || !!busy, onClick: function () { doPdf('en'); } }, h(Icon, { n: 'download', s: 14 }), busy === 'p' ? L('Generando…', 'Generating…') : 'PDF English')),
     trMsg ? h('div', { role: 'status', className: 'hint', style: { margin: 0 } }, trMsg) : null,
     !smp ? h('div', { className: 'hint', style: { margin: 0 } }, L('La traducción automática no está disponible en esta vista: los textos se mostrarán en su idioma original.', 'Automatic translation is not available in this view: texts will be shown in their original language.')) : null,
     h('section', { className: 'grid gap-3 sm:grid-cols-2 xl:grid-cols-4' },
@@ -2157,7 +2150,6 @@ function prosPdfBlocks(c) {
     '0–100 index: weighted percentile of OOIP, OGIP, annual oil and gas production, and remaining liquid and gas (proved reserves). Priority tiers: P1 = top 10 fields / top 25 reservoirs; P2 = up to 30 / 100; P3 = rest. MMSTB = million stock-tank barrels; MMMPC = Bscf (billion scf); MMBOE = million barrels of oil equivalent (6 Mscf = 1 BOE); BOPD = barrels of oil per day; MMscfd = million scf per day.');
   B.push({ t: 'h1', text: L('Prospectividad de campos y yacimientos · Plan Acelerado de Recuperación', 'Field and reservoir prospectivity · Accelerated Recovery Plan') });
   B.push({ t: 'p', bold: true, text: L('Libro de Reservas 2009 · PDVSA Gas (Oriente) · reservas probadas', '2009 Reserves Book · PDVSA Gas (Eastern Venezuela) · proved reserves') });
-  B.push({ t: 'meta', text: L('Preparado por: ' + CONSULTANT + ', Consultor Senior de Producción Petrolera · Para: Dirección de Estudios Integrados', 'Prepared by: ' + CONSULTANT + ', Senior Oil Production Consultant · For: Integrated Studies Directorate') });
   B.push({ t: 'meta', text: L('Emitido: ', 'Issued: ') + today() + ' · ' + pFiltTxt(fm.f) });
   B.push({ t: 'meta', text: L('Ponderación del índice: ', 'Index weighting: ') + pWTxt(fm.w) });
   B.push({ t: 'rule' });
@@ -2619,7 +2611,6 @@ function fcPdfBlocks(c, ranked, w) {
   var tn = function (t) { return [L('Alta', 'High'), L('Media', 'Medium'), L('Baja', 'Low')][t - 1]; };
   B.push({ t: 'h1', text: L('Campo Chimire · Análisis estratégico y jerarquización de oportunidades', 'Chimire Field · Strategic analysis and opportunity ranking') });
   B.push({ t: 'p', bold: true, text: L('Plan Acelerado de Recuperación de Producción (Venezuela 2027) · informe ejecutivo', 'Accelerated Production Recovery Plan (Venezuela 2027) · executive report') });
-  B.push({ t: 'meta', text: L('Preparado por: ' + CONSULTANT + ', Consultor Senior de Producción Petrolera · Para: Dirección de Estudios Integrados', 'Prepared by: ' + CONSULTANT + ', Senior Oil Production Consultant · For: Integrated Studies Directorate') });
   B.push({ t: 'meta', text: L('Emitido: ', 'Issued: ') + today() + L(' · Base: modelo estático (Castro y Mederos, 2016), Libro de Reservas 2009 de PDVSA Gas e informe de visita de campo · Sin datos de producción por pozo ni modelo dinámico', ' · Basis: static model (Castro and Mederos, 2016), PDVSA Gas 2009 Reserves Book and field visit report · No per-well production data or dynamic model') });
   B.push({ t: 'rule' });
   B.push({ t: 'h2', text: L('1. Resumen ejecutivo', '1. Executive summary') });
