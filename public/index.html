@@ -6,28 +6,29 @@ input{width:100%;box-sizing:border-box;margin:6px 0 12px;padding:10px;border-rad
 button{width:100%;padding:11px;border:0;border-radius:7px;background:#e08a1e;color:#111;font-weight:700;font-size:15px;cursor:pointer}
 a{color:#e08a1e;cursor:pointer;font-size:13px}#ok button{margin-top:4px}#m{margin-top:12px;font-size:13px;color:#ffb74d;min-height:18px}</style></head>
 <body><div class="c"><h1>OPTIMAX</h1><p>Análisis y reactivación de pozos · acceso del equipo</p>
-<form id="f"><label>Correo</label><input id="e" type="email" required autocomplete="email"><label>Contraseña</label><input id="p" type="password" required minlength="8" autocomplete="current-password"><div id="pw2w" style="display:none"><label>Confirmar contraseña</label><input id="p2" type="password" minlength="8" autocomplete="new-password"></div>
+<form id="f"><div id="nmw" style="display:none"><label>Nombre</label><input id="nm" type="text" autocomplete="given-name"><label>Apellido</label><input id="ap" type="text" autocomplete="family-name"></div><label>Correo</label><input id="e" type="email" required autocomplete="email"><label>Contraseña</label><input id="p" type="password" required minlength="8" autocomplete="current-password"><div id="pw2w" style="display:none"><label>Confirmar contraseña</label><input id="p2" type="password" minlength="8" autocomplete="new-password"></div>
 <button id="b">Entrar</button></form><div style="margin-top:10px;display:flex;justify-content:space-between"><a id="t">Crear cuenta</a><a id="r">Olvidé mi contraseña</a></div><div id="m"></div></div>
 <div class="c" id="ok" style="display:none;text-align:center"><h1>✔ Registro exitoso</h1><p style="margin:10px 0 18px;font-size:14px">Tu correo fue verificado. Ya puedes iniciar sesión con la contraseña que registraste.<br>Tu acceso quedará activo cuando el administrador lo apruebe.</p><button id="go">Haz clic aquí para iniciar sesión</button></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 var SB_URL='https://gwczlpofvxihdsvzggcg.supabase.co',SB_KEY='sb_publishable_XOPuvRPfmwc3dstJGjTbOg_L2yKFCxb';
 var sb=supabase.createClient(SB_URL,SB_KEY),mode='in',$=function(i){return document.getElementById(i)};
+function disp(x){return x&&x.nombre&&x.apellido?x.nombre.trim().charAt(0).toUpperCase()+'. '+x.apellido.trim():(x&&x.email)||''}
 function msg(t){$('m').textContent=t}
-$('t').onclick=function(){mode=mode==='in'?'up':'in';$('b').textContent=mode==='in'?'Entrar':'Crear cuenta';$('t').textContent=mode==='in'?'Crear cuenta':'Ya tengo cuenta';$('pw2w').style.display=mode==='up'?'block':'none';$('p2').required=mode==='up';$('p').autocomplete=mode==='up'?'new-password':'current-password';msg('')};
+$('t').onclick=function(){mode=mode==='in'?'up':'in';$('b').textContent=mode==='in'?'Entrar':'Crear cuenta';$('t').textContent=mode==='in'?'Crear cuenta':'Ya tengo cuenta';$('nmw').style.display=mode==='up'?'block':'none';$('nm').required=$('ap').required=mode==='up';$('pw2w').style.display=mode==='up'?'block':'none';$('p2').required=mode==='up';$('p').autocomplete=mode==='up'?'new-password':'current-password';msg('')};
 $('r').onclick=async function(){var e=$('e').value;if(!e){msg('Escribe tu correo arriba.');return}var r=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin});msg(r.error?r.error.message:'Te enviamos un enlace para restablecer la contraseña.')};
 $('f').onsubmit=async function(ev){ev.preventDefault();msg('...');var e=$('e').value,p=$('p').value,r;
- if(mode==='up'){if(p!==$('p2').value)return msg('Las contraseñas no coinciden. Verifica e intenta de nuevo.');r=await sb.auth.signUp({email:e,password:p,options:{emailRedirectTo:location.origin+'/?registro=ok'}});if(r.error)return msg(r.error.message);if(!r.data.session)return msg('Cuenta creada. Confirma tu correo y luego entra. El administrador debe aprobar tu acceso.')}
+ if(mode==='up'){var nm=$('nm').value.trim(),ap=$('ap').value.trim();if(!nm||!ap)return msg('Escribe tu nombre y apellido.');if(p!==$('p2').value)return msg('Las contraseñas no coinciden. Verifica e intenta de nuevo.');r=await sb.auth.signUp({email:e,password:p,options:{data:{nombre:nm,apellido:ap},emailRedirectTo:location.origin+'/?registro=ok'}});if(r.error)return msg(r.error.message);if(!r.data.session)return msg('Cuenta creada. Confirma tu correo y luego entra. El administrador debe aprobar tu acceso.')}
  else{r=await sb.auth.signInWithPassword({email:e,password:p});if(r.error)return msg(r.error.message)}
  boot()};
 async function boot(){
  var s=(await sb.auth.getSession()).data.session;if(!s)return;msg('Cargando...');
- var u=s.user,pr=await sb.from('profiles').select('role,activo').eq('user_id',u.id).maybeSingle();
+ var u=s.user,pr=await sb.from('profiles').select('role,activo,nombre,apellido').eq('user_id',u.id).maybeSingle();
  if(!pr.data||!pr.data.activo){msg('Tu cuenta está pendiente de aprobación por el administrador.');return}
- window.OPT_MEMBERS=[];if(pr.data.role==='admin'){var mm=await sb.from('profiles').select('user_id,email,nombre,role,activo');if(mm.data)window.OPT_MEMBERS=mm.data}
+ window.OPT_MEMBERS=[];if(pr.data.role==='admin'){var mm=await sb.from('profiles').select('user_id,email,nombre,apellido,role,activo');if(mm.data)window.OPT_MEMBERS=mm.data.map(function(x){x.disp=disp(x);return x})}
  var res=await fetch('/api/app',{headers:{Authorization:'Bearer '+s.access_token}});
  if(!res.ok){msg('No se pudo cargar la aplicación ('+res.status+').');return}
- var html=await res.text();window.__sb=sb;window.OPT_ROLE=pr.data.role;window.OPT_USER={id:u.id,email:u.email};
+ var html=await res.text();window.__sb=sb;window.OPT_ROLE=pr.data.role;window.OPT_USER={id:u.id,email:u.email,nombre:pr.data.nombre,apellido:pr.data.apellido,disp:disp({nombre:pr.data.nombre,apellido:pr.data.apellido,email:u.email})};
  document.open();document.write(html);document.close()}
 var h=location.hash||'',q=location.search||'';
 if(/registro=ok/.test(q)||/type=signup/.test(h)){

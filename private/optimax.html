@@ -145,7 +145,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
   /* barra superior: usuario, rol, salir, y carga del Libro (solo admin) */
   var bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:9999;background:#14202b;color:#cfd8dc;border:1px solid #2c3e4c;border-radius:8px;padding:6px 10px;font:12px IBM Plex Sans,sans-serif;display:flex;gap:10px;align-items:center';
-  var tx = document.createElement('span'); tx.textContent = (me.email || '') + ' · ' + role; bar.appendChild(tx);
+  var tx = document.createElement('span'); tx.textContent = (me.disp || me.email || '') + ' · ' + role; bar.appendChild(tx);
   function btn(t, f) { var b = document.createElement('button'); b.textContent = t; b.style.cssText = 'background:#e08a1e;color:#111;border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px IBM Plex Sans,sans-serif'; b.onclick = f; bar.appendChild(b); return b; }
   btn('Salir', async function () { await sb.auth.signOut(); location.reload(); });
   if (role === 'admin') {
@@ -1702,7 +1702,7 @@ function TimeLog(p) {
   var ROLE = window.OPT_ROLE || '', ME = (window.OPT_USER && window.OPT_USER.id) || '', isAdm = ROLE === 'admin';
   var MEM = isAdm ? (window.OPT_MEMBERS || []) : [];
   var sM = useState(ME), sel = sM[0], setSel = sM[1];
-  var memName = function (id) { if (id === ME && window.OPT_USER && !MEM.length) return window.OPT_USER.email || ''; var m = MEM.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.nombre || m.email) : (id === ME && window.OPT_USER ? window.OPT_USER.email : L('Sin asignar', 'Unassigned')); };
+  var memName = function (id) { if (id === ME && window.OPT_USER && !MEM.length) return window.OPT_USER.disp || window.OPT_USER.email || ''; var m = MEM.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.disp || m.nombre || m.email) : (id === ME && window.OPT_USER ? (window.OPT_USER.disp || window.OPT_USER.email) : L('Sin asignar', 'Unassigned')); };
   var ownerOf = function (e) { return e.owner || (ROLE ? ME : ''); };
   var target = ROLE ? (isAdm && sel !== 'all' ? sel : ME) : '';
   var whoX = ROLE ? (isAdm && sel === 'all' ? L('Todos los miembros', 'All members') : memName(target)) : who;
@@ -1782,7 +1782,7 @@ function TimeLog(p) {
     h('section', { className: 'panel p-4 flex flex-wrap items-end gap-4' },
       h('div', { style: { flex: '1 1 170px' } }, h(TxtIn, { id: 'tl-from', type: 'date', label: L('Desde', 'From'), value: from, onChange: setFrom })),
       h('div', { style: { flex: '1 1 170px' } }, h(TxtIn, { id: 'tl-to', type: 'date', label: L('Hasta', 'To'), value: to, onChange: setTo })),
-      ROLE ? (isAdm ? h('div', { style: { flex: '2 1 230px' } }, h(SelIn, { id: 'tl-mem', label: L('Miembro del equipo', 'Team member'), value: sel, onChange: setSel, options: [['all', L('Todos los miembros (solo ver)', 'All members (view only)')]].concat(MEM.filter(function (m) { return m.activo !== false; }).sort(function (a, b) { return a.user_id === ME ? -1 : b.user_id === ME ? 1 : ((a.nombre || a.email) < (b.nombre || b.email) ? -1 : 1); }).map(function (m) { return [m.user_id, (m.nombre || m.email) + (m.user_id === ME ? L(' (yo)', ' (me)') : '')]; })) }))
+      ROLE ? (isAdm ? h('div', { style: { flex: '2 1 230px' } }, h(SelIn, { id: 'tl-mem', label: L('Miembro del equipo', 'Team member'), value: sel, onChange: setSel, options: [['all', L('Todos los miembros (solo ver)', 'All members (view only)')]].concat(MEM.filter(function (m) { return m.activo !== false; }).sort(function (a, b) { return a.user_id === ME ? -1 : b.user_id === ME ? 1 : ((a.disp || a.nombre || a.email) < (b.disp || b.nombre || b.email) ? -1 : 1); }).map(function (m) { return [m.user_id, (m.disp || m.nombre || m.email) + (m.user_id === ME ? L(' (yo)', ' (me)') : '')]; })) }))
         : h('div', { style: { flex: '2 1 230px' } }, h('div', { className: 'eyebrow' }, L('Mi registro', 'My log')), h('div', null, whoX)))
         : h('div', { style: { flex: '2 1 230px' } }, h(TxtIn, { id: 'tl-who', label: L('Nombre del consultor (para el PDF y Excel)', 'Consultant name (for PDF and Excel)'), value: who, onChange: setWho })),
       h('button', { type: 'button', className: 'btn2', onClick: function () { setFrom(''); setTo(''); } }, L('Todo el período', 'All time')),
