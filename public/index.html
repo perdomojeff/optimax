@@ -23,6 +23,7 @@ async function boot(){
  var s=(await sb.auth.getSession()).data.session;if(!s)return;msg('Cargando...');
  var u=s.user,pr=await sb.from('profiles').select('role,activo').eq('user_id',u.id).maybeSingle();
  if(!pr.data||!pr.data.activo){msg('Tu cuenta está pendiente de aprobación por el administrador.');return}
+ window.OPT_MEMBERS=[];if(pr.data.role==='admin'){var mm=await sb.from('profiles').select('user_id,email,nombre,role,activo');if(mm.data)window.OPT_MEMBERS=mm.data}
  var res=await fetch('/api/app',{headers:{Authorization:'Bearer '+s.access_token}});
  if(!res.ok){msg('No se pudo cargar la aplicación ('+res.status+').');return}
  var html=await res.text();window.__sb=sb;window.OPT_ROLE=pr.data.role;window.OPT_USER={id:u.id,email:u.email};

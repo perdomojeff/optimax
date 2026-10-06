@@ -117,6 +117,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
       doc: function (id) {
         return {
           set: async function (obj) {
+            if (c === 'timelog' && !obj.owner) obj = Object.assign({}, obj, { owner: me.id });
             var r = await sb.from('app_docs').upsert({ collection: c, doc_id: String(id), data: obj, updated_by: me.id || null }, { onConflict: 'collection,doc_id' });
             if (r.error) throw mkErr(r.error);
           },
@@ -1698,6 +1699,13 @@ function TimeLog(p) {
   var s7 = useState(''), err = s7[0], setErr = s7[1];
   var s8 = useState(null), smp = s8[0], setSmp = s8[1];
   var s9 = useState(''), trMsg = s9[0], setTrMsg = s9[1];
+  var ROLE = window.OPT_ROLE || '', ME = (window.OPT_USER && window.OPT_USER.id) || '', isAdm = ROLE === 'admin';
+  var MEM = isAdm ? (window.OPT_MEMBERS || []) : [];
+  var sM = useState(ME), sel = sM[0], setSel = sM[1];
+  var memName = function (id) { if (id === ME && window.OPT_USER && !MEM.length) return window.OPT_USER.email || ''; var m = MEM.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.nombre || m.email) : (id === ME && window.OPT_USER ? window.OPT_USER.email : L('Sin asignar', 'Unassigned')); };
+  var ownerOf = function (e) { return e.owner || (ROLE ? ME : ''); };
+  var target = ROLE ? (isAdm && sel !== 'all' ? sel : ME) : '';
+  var whoX = ROLE ? (isAdm && sel === 'all' ? L('Todos los miembros', 'All members') : memName(target)) : who;
   useEffect(function () { var alive = true; (async function () { try { var s = window.claude && window.claude.use ? await window.claude.use('sample') : null; if (alive && s) setSmp(function () { return s; }); } catch (e) { } })(); return function () { alive = false; }; }, []);
   var translate = async function (items) {
     if (!smp || !items.length) return { done: 0, failed: items.length, map: {} };
@@ -1725,7 +1733,7 @@ function TimeLog(p) {
     setTrMsg(r.failed ? L('No se pudieron traducir ', 'Could not translate ') + r.failed + L(' registro(s). Reintenta con el botón Traducir.', ' record(s). Retry with the Translate button.') : L('Traducción lista.', 'Translation done.'));
     return r;
   };
-  var all = (p.entries || []).filter(function (e) { return tlValid(e); }).sort(tlSort);
+  var all = (p.entries || []).filter(function (e) { return tlValid(e) && (!ROLE || (isAdm ? (sel === 'all' || ownerOf(e) === sel) : ownerOf(e) === ME)); }).sort(tlSort);
   var list = all.filter(function (e) { return (!from || e.date >= from) && (!to || e.date <= to); });
   var st = tlStats(list);
   var pending = all.filter(function (e) { return !trOK(e); });
@@ -1737,18 +1745,19 @@ function TimeLog(p) {
     if (hmMin(e.end) <= hmMin(e.start)) return setErr(L('La hora final debe ser posterior a la de inicio (misma fecha). Para una jornada que cruza la medianoche, registra dos actividades.', 'End time must be after start time (same date). For a shift crossing midnight, log two activities.'));
     if (!e.activity) return setErr(L('Escribe la actividad ejecutada.', 'Enter the activity performed.'));
     var docId = editId || uid(), doc = Object.assign({}, e, { updated: new Date().toISOString() });
+    if (ROLE) { var prevE = (p.entries || []).filter(function (x) { return x.id === editId; })[0]; doc.owner = (prevE && prevE.owner) || target; }
     var ok = await p.save('timelog', docId, doc);
     if (ok !== false && smp) runTranslate([Object.assign({ id: docId }, doc)]);
     if (ok !== false) { setEditId(''); setF({ date: f.date, start: f.end, end: f.end, activity: '', ref: '' }); setErr(''); }
   };
   var edit = function (e) { setEditId(e.id); setF({ date: e.date, start: e.start, end: e.end, activity: e.activity, ref: e.ref || '' }); setErr(''); };
   var cancel = function () { setEditId(''); setF({ date: today(), start: '08:00', end: '17:00', activity: '', ref: '' }); setErr(''); };
-  var doXlsx = async function () { setBusy('x'); var pend = list.filter(function (e) { return !trOK(e); }), eff = list; if (pend.length && smp) { var rr = await runTranslate(pend); eff = list.map(function (e) { return rr.map[e.id] ? Object.assign({}, e, rr.map[e.id]) : e; }); } await p.runExport(function () { return exportTimeXlsx(eff, who, from, to); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
+  var doXlsx = async function () { setBusy('x'); var pend = list.filter(function (e) { return !trOK(e); }), eff = list; if (pend.length && smp) { var rr = await runTranslate(pend); eff = list.map(function (e) { return rr.map[e.id] ? Object.assign({}, e, rr.map[e.id]) : e; }); } await p.runExport(function () { return exportTimeXlsx(eff, whoX, from, to); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
   var doPdf = async function (lg) {
     setBusy('p');
     var pend = list.filter(function (e) { return !trOK(e); }), eff = list;
     if (lg === 'en' && pend.length && smp) { var rr = await runTranslate(pend); eff = list.map(function (e) { return rr.map[e.id] ? Object.assign({}, e, rr.map[e.id]) : e; }); }
-    await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(timePdfAll(eff, who, from, to, lg), { title: lg === 'es' ? 'Registro de tiempo' : 'Time log', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Optimax_Tiempo_Consultor_' + lg.toUpperCase() + '_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.');
+    await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(timePdfAll(eff, whoX, from, to, lg), { title: lg === 'es' ? 'Registro de tiempo' : 'Time log', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Optimax_Tiempo_Consultor_' + lg.toUpperCase() + '_' + today() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.');
     setBusy('');
   };
 
@@ -1756,6 +1765,8 @@ function TimeLog(p) {
   return h('div', { className: 'flex flex-col gap-4' },
     h('section', { className: 'panel p-4 flex flex-col gap-3' },
       h('div', { className: 'eyebrow' }, editId ? L('Editar actividad', 'Edit activity') : L('Registrar actividad', 'Log activity')),
+      isAdm && sel !== 'all' && sel !== ME ? h('div', { className: 'hint', style: { margin: 0, color: 'var(--warn)' } }, L('Registrando a nombre de: ', 'Logging on behalf of: ') + memName(sel)) : null,
+      isAdm && sel === 'all' ? h('div', { className: 'hint', style: { margin: 0 } }, L('Vista de todos los miembros. Las actividades nuevas se registran a tu nombre; elige un miembro arriba para registrar por él.', 'All-members view. New activities are logged under your name; pick a member above to log on their behalf.')) : null,
       h('div', { className: 'grid gap-3', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' } },
         h(TxtIn, { id: 'tl-date', type: 'date', label: L('Fecha', 'Date'), value: f.date, onChange: function (v) { set('date', v); } }),
         h(TxtIn, { id: 'tl-start', type: 'time', label: L('Hora de inicio', 'Start time'), value: f.start, onChange: function (v) { set('start', v); } }),
@@ -1771,7 +1782,9 @@ function TimeLog(p) {
     h('section', { className: 'panel p-4 flex flex-wrap items-end gap-4' },
       h('div', { style: { flex: '1 1 170px' } }, h(TxtIn, { id: 'tl-from', type: 'date', label: L('Desde', 'From'), value: from, onChange: setFrom })),
       h('div', { style: { flex: '1 1 170px' } }, h(TxtIn, { id: 'tl-to', type: 'date', label: L('Hasta', 'To'), value: to, onChange: setTo })),
-      h('div', { style: { flex: '2 1 230px' } }, h(TxtIn, { id: 'tl-who', label: L('Nombre del consultor (para el PDF y Excel)', 'Consultant name (for PDF and Excel)'), value: who, onChange: setWho })),
+      ROLE ? (isAdm ? h('div', { style: { flex: '2 1 230px' } }, h(SelIn, { id: 'tl-mem', label: L('Miembro del equipo', 'Team member'), value: sel, onChange: setSel, options: [['all', L('Todos los miembros (solo ver)', 'All members (view only)')]].concat(MEM.filter(function (m) { return m.activo !== false; }).sort(function (a, b) { return a.user_id === ME ? -1 : b.user_id === ME ? 1 : ((a.nombre || a.email) < (b.nombre || b.email) ? -1 : 1); }).map(function (m) { return [m.user_id, (m.nombre || m.email) + (m.user_id === ME ? L(' (yo)', ' (me)') : '')]; })) }))
+        : h('div', { style: { flex: '2 1 230px' } }, h('div', { className: 'eyebrow' }, L('Mi registro', 'My log')), h('div', null, whoX)))
+        : h('div', { style: { flex: '2 1 230px' } }, h(TxtIn, { id: 'tl-who', label: L('Nombre del consultor (para el PDF y Excel)', 'Consultant name (for PDF and Excel)'), value: who, onChange: setWho })),
       h('button', { type: 'button', className: 'btn2', onClick: function () { setFrom(''); setTo(''); } }, L('Todo el período', 'All time')),
       smp && pending.length ? h('button', { type: 'button', className: 'btn2', disabled: !!trMsg && /…$/.test(trMsg), onClick: function () { runTranslate(pending); } }, L('Traducir al inglés (', 'Translate to English (') + pending.length + ')') : null,
       h('button', { type: 'button', className: 'btn2 prim', disabled: !list.length || !!busy, onClick: doXlsx }, h(Icon, { n: 'download', s: 14 }), busy === 'x' ? L('Generando…', 'Generating…') : L('Exportar Excel', 'Export Excel')),
@@ -1789,7 +1802,7 @@ function TimeLog(p) {
         h('thead', null, h('tr', null, [L('Fecha', 'Date'), L('Inicio', 'Start'), L('Fin', 'End'), L('Horas', 'Hours'), L('Actividad ejecutada', 'Activity performed'), L('Referencia', 'Reference'), ''].map(function (c, i) { return h('th', { key: i }, c); }))),
         h('tbody', null, list.map(function (e) {
           return h('tr', { key: e.id },
-            h('td', { className: 'mono' }, tlDowL(e.date) + ' ' + fmtDay(e.date)), h('td', { className: 'mono' }, e.start), h('td', { className: 'mono' }, e.end), h('td', { className: 'mono' }, nf(tlHours(e), 2)),
+            h('td', { className: 'mono' }, tlDowL(e.date) + ' ' + fmtDay(e.date), isAdm && sel === 'all' ? h('div', { className: 'hint', style: { margin: '2px 0 0' } }, memName(ownerOf(e))) : null), h('td', { className: 'mono' }, e.start), h('td', { className: 'mono' }, e.end), h('td', { className: 'mono' }, nf(tlHours(e), 2)),
             h('td', { style: { whiteSpace: 'normal', minWidth: 260 } }, h('i', { style: { display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: actColor(e.activity), marginRight: 6 } }), actShown(e),
               h('div', { className: 'hint', style: { margin: '2px 0 0', fontStyle: 'italic' } }, LANG === 'es' ? (trOK(e) ? 'EN: ' + e.activity_en : 'EN: ' + L('pendiente de traducir', 'pending')) : 'ES: ' + e.activity)),
             h('td', { style: { whiteSpace: 'normal' } }, refShown(e) || '—', e.ref ? h('div', { className: 'hint', style: { margin: '2px 0 0', fontStyle: 'italic' } }, LANG === 'es' ? (trOK(e) ? 'EN: ' + (e.ref_en || e.ref) : '') : 'ES: ' + e.ref) : null),
@@ -3839,7 +3852,7 @@ function App() {
   var ctx = { wells: wells, entries: entries, fields: fields, fieldById: fieldById, resById: resById, reservoirs: store.data.reservoirs, save: store.save, removeDoc: store.remove, assets: store.assets, toast: toast, runExport: runExport, createExample: createExample,
     removeWell: function (id) { store.remove('wells', id); setNav({ fieldId: nav.fieldId, resId: nav.resId }); } };
   var counts = { data: 0, minor: 0, major: 0 }; entries.forEach(function (e) { counts[e.a.basket]++; });
-  var chip = store.mode === 'cloud' ? (store.canWrite ? [L('Guardado compartido activo', 'Shared saving on'), 'var(--good)'] : [L('Solo lectura', 'Read only'), 'var(--warn)']) : store.mode === 'local' ? [L('Modo local: los datos no se guardan', 'Local mode: data is not saved'), 'var(--warn)'] : [L('Conectando…', 'Connecting…'), 'var(--muted)'];
+  var chip = store.mode === 'cloud' ? (store.canWrite ? [L('Guardado compartido activo', 'Shared saving on'), 'var(--good)'] : [window.OPT_ROLE ? L('Solo lectura (tu tiempo sí se edita)', 'Read only (your time log is editable)') : L('Solo lectura', 'Read only'), 'var(--warn)']) : store.mode === 'local' ? [L('Modo local: los datos no se guardan', 'Local mode: data is not saved'), 'var(--warn)'] : [L('Conectando…', 'Connecting…'), 'var(--muted)'];
 
   return h('div', { className: 'mx-auto w-full', style: { maxWidth: 1360, paddingInline: 16, paddingBlock: 20 } },
     h('div', { className: 'eyebrow mb-3', style: { color: 'var(--accent)', letterSpacing: '.14em', textTransform: 'uppercase', paddingBottom: 6, borderBottom: '1px solid var(--line, rgba(128,128,128,.3))' } }, L('Dirección Acelerada de Estudios Geocientíficos', 'Accelerated Geoscience Studies Directorate')),
