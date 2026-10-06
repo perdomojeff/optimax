@@ -145,7 +145,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
   /* barra superior: usuario, rol, salir, y carga del Libro (solo admin) */
   var bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:9999;background:#14202b;color:#cfd8dc;border:1px solid #2c3e4c;border-radius:8px;padding:6px 10px;font:12px IBM Plex Sans,sans-serif;display:flex;gap:10px;align-items:center';
-  var tx = document.createElement('span'); tx.textContent = (me.disp || me.email || '') + ' · ' + role; bar.appendChild(tx);
+  var tx = document.createElement('span'); tx.textContent = (me.disp || me.email || '') + ' · ' + (role === 'gerente' ? 'Gerente' : role); bar.appendChild(tx);
   function btn(t, f) { var b = document.createElement('button'); b.textContent = t; b.style.cssText = 'background:#e08a1e;color:#111;border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px IBM Plex Sans,sans-serif'; b.onclick = f; bar.appendChild(b); return b; }
   btn('Salir', async function () { await sb.auth.signOut(); location.reload(); });
   if (role === 'admin') {
@@ -1699,13 +1699,13 @@ function TimeLog(p) {
   var s7 = useState(''), err = s7[0], setErr = s7[1];
   var s8 = useState(null), smp = s8[0], setSmp = s8[1];
   var s9 = useState(''), trMsg = s9[0], setTrMsg = s9[1];
-  var ROLE = window.OPT_ROLE || '', ME = (window.OPT_USER && window.OPT_USER.id) || '', isAdm = ROLE === 'admin';
-  var MEM = isAdm ? (window.OPT_MEMBERS || []) : [];
+  var ROLE = window.OPT_ROLE || '', ME = (window.OPT_USER && window.OPT_USER.id) || '', isAdm = ROLE === 'admin', isMgr = ROLE === 'gerente', viewAll = isAdm || isMgr;
+  var MEM = viewAll ? (window.OPT_MEMBERS || []) : [];
   var sM = useState(ME), sel = sM[0], setSel = sM[1];
   var memName = function (id) { if (id === ME && window.OPT_USER && !MEM.length) return window.OPT_USER.disp || window.OPT_USER.email || ''; var m = MEM.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.disp || m.nombre || m.email) : (id === ME && window.OPT_USER ? (window.OPT_USER.disp || window.OPT_USER.email) : L('Sin asignar', 'Unassigned')); };
   var ownerOf = function (e) { return e.owner || (ROLE ? ME : ''); };
   var target = ROLE ? (isAdm && sel !== 'all' ? sel : ME) : '';
-  var whoX = ROLE ? (isAdm && sel === 'all' ? L('Todos los miembros', 'All members') : memName(target)) : who;
+  var whoX = ROLE ? (viewAll && sel === 'all' ? L('Todos los miembros', 'All members') : memName(target)) : who;
   useEffect(function () { var alive = true; (async function () { try { var s = window.claude && window.claude.use ? await window.claude.use('sample') : null; if (alive && s) setSmp(function () { return s; }); } catch (e) { } })(); return function () { alive = false; }; }, []);
   var translate = async function (items) {
     if (!smp || !items.length) return { done: 0, failed: items.length, map: {} };
@@ -1733,7 +1733,7 @@ function TimeLog(p) {
     setTrMsg(r.failed ? L('No se pudieron traducir ', 'Could not translate ') + r.failed + L(' registro(s). Reintenta con el botón Traducir.', ' record(s). Retry with the Translate button.') : L('Traducción lista.', 'Translation done.'));
     return r;
   };
-  var all = (p.entries || []).filter(function (e) { return tlValid(e) && (!ROLE || (isAdm ? (sel === 'all' || ownerOf(e) === sel) : ownerOf(e) === ME)); }).sort(tlSort);
+  var all = (p.entries || []).filter(function (e) { return tlValid(e) && (!ROLE || (viewAll ? (sel === 'all' || ownerOf(e) === sel) : ownerOf(e) === ME)); }).sort(tlSort);
   var list = all.filter(function (e) { return (!from || e.date >= from) && (!to || e.date <= to); });
   var st = tlStats(list);
   var pending = all.filter(function (e) { return !trOK(e); });
@@ -1762,8 +1762,10 @@ function TimeLog(p) {
   };
 
   var card = function (label, val, unit) { return h('div', { className: 'panel p-4', style: { minWidth: 0 } }, h('div', { className: 'eyebrow' }, label), h('div', { className: 'big' }, val, unit ? h('span', { className: 'unit', style: { marginLeft: 8, fontSize: 12 } }, unit) : null)); };
+  var mgrView = isMgr && sel !== ME;
   return h('div', { className: 'flex flex-col gap-4' },
-    h('section', { className: 'panel p-4 flex flex-col gap-3' },
+    mgrView ? h('div', { className: 'hint', style: { margin: 0 } }, L('Vista de solo lectura del registro del equipo. Para registrar tus propias actividades, elige tu nombre en "Miembro del equipo".', 'Read-only view of the team log. To log your own activities, pick your name under "Team member".')) : null,
+    h('section', { className: 'panel p-4 flex flex-col gap-3', style: mgrView ? { display: 'none' } : undefined },
       h('div', { className: 'eyebrow' }, editId ? L('Editar actividad', 'Edit activity') : L('Registrar actividad', 'Log activity')),
       isAdm && sel !== 'all' && sel !== ME ? h('div', { className: 'hint', style: { margin: 0, color: 'var(--warn)' } }, L('Registrando a nombre de: ', 'Logging on behalf of: ') + memName(sel)) : null,
       isAdm && sel === 'all' ? h('div', { className: 'hint', style: { margin: 0 } }, L('Vista de todos los miembros. Las actividades nuevas se registran a tu nombre; elige un miembro arriba para registrar por él.', 'All-members view. New activities are logged under your name; pick a member above to log on their behalf.')) : null,
@@ -1782,7 +1784,7 @@ function TimeLog(p) {
     h('section', { className: 'panel p-4 flex flex-wrap items-end gap-4' },
       h('div', { style: { flex: '1 1 170px' } }, h(TxtIn, { id: 'tl-from', type: 'date', label: L('Desde', 'From'), value: from, onChange: setFrom })),
       h('div', { style: { flex: '1 1 170px' } }, h(TxtIn, { id: 'tl-to', type: 'date', label: L('Hasta', 'To'), value: to, onChange: setTo })),
-      ROLE ? (isAdm ? h('div', { style: { flex: '2 1 230px' } }, h(SelIn, { id: 'tl-mem', label: L('Miembro del equipo', 'Team member'), value: sel, onChange: setSel, options: [['all', L('Todos los miembros (solo ver)', 'All members (view only)')]].concat(MEM.filter(function (m) { return m.activo !== false; }).sort(function (a, b) { return a.user_id === ME ? -1 : b.user_id === ME ? 1 : ((a.disp || a.nombre || a.email) < (b.disp || b.nombre || b.email) ? -1 : 1); }).map(function (m) { return [m.user_id, (m.disp || m.nombre || m.email) + (m.user_id === ME ? L(' (yo)', ' (me)') : '')]; })) }))
+      ROLE ? (viewAll ? h('div', { style: { flex: '2 1 230px' } }, h(SelIn, { id: 'tl-mem', label: L('Miembro del equipo', 'Team member'), value: sel, onChange: setSel, options: [['all', L('Todos los miembros (solo ver)', 'All members (view only)')]].concat(MEM.filter(function (m) { return m.activo !== false; }).sort(function (a, b) { return a.user_id === ME ? -1 : b.user_id === ME ? 1 : ((a.disp || a.nombre || a.email) < (b.disp || b.nombre || b.email) ? -1 : 1); }).map(function (m) { return [m.user_id, (m.disp || m.nombre || m.email) + (m.user_id === ME ? L(' (yo)', ' (me)') : '')]; })) }))
         : h('div', { style: { flex: '2 1 230px' } }, h('div', { className: 'eyebrow' }, L('Mi registro', 'My log')), h('div', null, whoX)))
         : h('div', { style: { flex: '2 1 230px' } }, h(TxtIn, { id: 'tl-who', label: L('Nombre del consultor (para el PDF y Excel)', 'Consultant name (for PDF and Excel)'), value: who, onChange: setWho })),
       h('button', { type: 'button', className: 'btn2', onClick: function () { setFrom(''); setTo(''); } }, L('Todo el período', 'All time')),
@@ -1802,11 +1804,11 @@ function TimeLog(p) {
         h('thead', null, h('tr', null, [L('Fecha', 'Date'), L('Inicio', 'Start'), L('Fin', 'End'), L('Horas', 'Hours'), L('Actividad ejecutada', 'Activity performed'), L('Referencia', 'Reference'), ''].map(function (c, i) { return h('th', { key: i }, c); }))),
         h('tbody', null, list.map(function (e) {
           return h('tr', { key: e.id },
-            h('td', { className: 'mono' }, tlDowL(e.date) + ' ' + fmtDay(e.date), isAdm && sel === 'all' ? h('div', { className: 'hint', style: { margin: '2px 0 0' } }, memName(ownerOf(e))) : null), h('td', { className: 'mono' }, e.start), h('td', { className: 'mono' }, e.end), h('td', { className: 'mono' }, nf(tlHours(e), 2)),
+            h('td', { className: 'mono' }, tlDowL(e.date) + ' ' + fmtDay(e.date), viewAll && sel === 'all' ? h('div', { className: 'hint', style: { margin: '2px 0 0' } }, memName(ownerOf(e))) : null), h('td', { className: 'mono' }, e.start), h('td', { className: 'mono' }, e.end), h('td', { className: 'mono' }, nf(tlHours(e), 2)),
             h('td', { style: { whiteSpace: 'normal', minWidth: 260 } }, h('i', { style: { display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: actColor(e.activity), marginRight: 6 } }), actShown(e),
               h('div', { className: 'hint', style: { margin: '2px 0 0', fontStyle: 'italic' } }, LANG === 'es' ? (trOK(e) ? 'EN: ' + e.activity_en : 'EN: ' + L('pendiente de traducir', 'pending')) : 'ES: ' + e.activity)),
             h('td', { style: { whiteSpace: 'normal' } }, refShown(e) || '—', e.ref ? h('div', { className: 'hint', style: { margin: '2px 0 0', fontStyle: 'italic' } }, LANG === 'es' ? (trOK(e) ? 'EN: ' + (e.ref_en || e.ref) : '') : 'ES: ' + e.ref) : null),
-            h('td', null, h('div', { className: 'flex gap-2' }, h('button', { type: 'button', className: 'btn2', onClick: function () { edit(e); } }, L('Editar', 'Edit')),
+            h('td', null, isMgr && ownerOf(e) !== ME ? null : h('div', { className: 'flex gap-2' }, h('button', { type: 'button', className: 'btn2', onClick: function () { edit(e); } }, L('Editar', 'Edit')),
               h(ConfirmBtn, { label: L('Eliminar', 'Delete'), confirmLabel: L('Confirmar', 'Confirm'), onConfirm: function () { p.remove('timelog', e.id); if (editId === e.id) cancel(); } }))));
         })),
         h('tfoot', null, h('tr', null, h('td', { colSpan: 3, style: { fontWeight: 600 } }, 'TOTAL'), h('td', { className: 'mono', style: { fontWeight: 700 } }, nf(st.total, 2)), h('td', { colSpan: 3 }, '')))))
@@ -3241,6 +3243,7 @@ function ImportTool(p) {
   };
   var apply = async function () {
     var ok = 0, bad = 0, i;
+    if (window.OPT_ROLE === 'gerente' && (plan.newFields.length || plan.newReservoirs.length || plan.wells.some(function (w) { return w.isNew; }))) { setFail(L('Con el rol Gerente no puedes crear campos, yacimientos ni pozos nuevos. Quita las filas nuevas del archivo o pídele al administrador que las cree.', 'With the Manager role you cannot create new fields, reservoirs or wells. Remove the new rows from the file or ask the administrator to create them.')); return; }
     var changed = plan.wells.filter(function (w) { return w.isNew || w.cnt.hist[0] || w.cnt.prod[0] || w.cnt.qest || w.cnt.plan || w.cnt.info; });
     setBusy(L('Guardando…', 'Saving…'));
     for (i = 0; i < plan.newFields.length; i++) await ctx.save('fields', plan.newFields[i].id, { name: plan.newFields[i].name, region: plan.newFields[i].region });
@@ -3305,16 +3308,19 @@ function Tablero(p) {
       options: [['', L('— Selecciona un pozo —', '— Select a well —')]].concat(sorted.map(function (w) { return [w.id, w.name + ' · ' + (withField ? ((ctx.fieldById[w.fieldId] || {}).name || '') + ' · ' : '') + ((ctx.resById[w.reservoirId] || {}).name || '')]; })) }));
   };
   var addField = async function () {
+    if (window.OPT_ROLE === 'gerente') return;
     if (!nfld.name.trim()) return;
     await ctx.save('fields', uid(), { name: nfld.name.trim(), region: nfld.region });
     setNfld({ name: '', region: nfld.region });
   };
   var addRes = async function () {
+    if (window.OPT_ROLE === 'gerente') return;
     if (!nres.trim()) return;
     await ctx.save('reservoirs', uid(), { name: nres.trim(), fieldId: nav.fieldId });
     setNres('');
   };
   var addWell = async function () {
+    if (window.OPT_ROLE === 'gerente') return;
     if (!nwell.name.trim()) return;
     var id = uid();
     var ok = await ctx.save('wells', id, { name: nwell.name.trim(), fieldId: nav.fieldId, reservoirId: nav.resId, status: nwell.status, lift: nwell.lift, history: [], prod: [], nodal: { mode: 'nodal' }, diag: { flags: {} }, img: {}, updated: new Date().toISOString() });
@@ -3362,7 +3368,7 @@ function Tablero(p) {
           h('div', { className: 'hint', style: { marginTop: 2 } }, (f.region === 'ori' ? L('Oriente VZLA', 'Eastern Venezuela') : L('Occidente VZLA', 'Western Venezuela')) + ' · ' + rs.length + ' ' + L('yacimientos', 'reservoirs') + ' · ' + ws.length + ' ' + L('pozos', 'wells')),
           h(MiniKpis, { k: aggKPI(ws) }));
       })),
-      h('div', { className: 'panel p-4' },
+      h('div', { className: 'panel p-4', style: window.OPT_ROLE === 'gerente' ? { display: 'none' } : undefined },
         h('div', { className: 'eyebrow mb-2' }, L('Agregar campo (por ejemplo, de Oriente)', 'Add field (for example, Eastern Venezuela)')),
         h('div', { className: 'grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto] items-end' },
           h(TxtIn, { id: 'nf-name', label: L('Nombre del campo', 'Field name'), value: nfld.name, onChange: function (v) { setNfld(Object.assign({}, nfld, { name: v })); } }),
@@ -3386,7 +3392,7 @@ function Tablero(p) {
           return h('tr', { key: r.id }, h('td', null, h('button', { type: 'button', className: 'lnk', onClick: function () { setNav({ fieldId: nav.fieldId, resId: r.id }); } }, r.name)), h('td', { className: 'mono' }, ws.length), krow(aggKPI(ws)),
             h('td', null, h(ConfirmBtn, { label: L('Eliminar', 'Delete') + (ws.length ? ' (' + ws.length + ' ' + L('pozos', 'wells') + ')' : ''), confirmLabel: ws.length ? L('Confirmar: borra sus pozos', 'Confirm: deletes its wells') : L('Confirmar', 'Confirm'), onConfirm: function () { removeRes(r); } })));
         }) }) : h('div', { className: 'hint' }, L('Este campo aún no tiene yacimientos. Agrega el primero.', 'This field has no reservoirs yet. Add the first one.')),
-        h('div', { className: 'grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] items-end' },
+        h('div', { className: 'grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] items-end', style: window.OPT_ROLE === 'gerente' ? { display: 'none' } : undefined },
           h(TxtIn, { id: 'nr-name', label: L('Nombre del yacimiento', 'Reservoir name'), value: nres, ph: L('Ej.: B-6-X.01', 'E.g.: B-6-X.01'), onChange: setNres }),
           h('button', { type: 'button', className: 'btn2 prim', onClick: addRes }, h(Icon, { n: 'plus', s: 14 }), L('Agregar yacimiento', 'Add reservoir')))));
   } else {
@@ -3412,7 +3418,7 @@ function Tablero(p) {
             h('td', null, e && e.a.cat ? h(Chip, { color: CAT_COLOR[e.a.cat] }, e.a.cat) : '—'),
             h('td', null, e ? h(Chip, { color: BASKETS[e.a.basket].color }, bname(e.a.basket)) : '—'), krow(w._k));
         }) }) : h('div', { className: 'hint' }, L('Este yacimiento aún no tiene pozos.', 'This reservoir has no wells yet.')),
-        h('div', { className: 'grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px_200px_auto] items-end' },
+        h('div', { className: 'grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px_200px_auto] items-end', style: window.OPT_ROLE === 'gerente' ? { display: 'none' } : undefined },
           h(TxtIn, { id: 'nw-name', label: L('Nombre del pozo', 'Well name'), value: nwell.name, ph: 'LL-1234', onChange: function (v) { setNwell(Object.assign({}, nwell, { name: v })); } }),
           h(SelIn, { id: 'nw-status', label: L('Estado', 'Status'), value: nwell.status, onChange: function (v) { setNwell(Object.assign({}, nwell, { status: v })); }, options: [['active', L('Activo', 'Active')], ['inactive', L('Inactivo', 'Inactive')]] }),
           h(SelIn, { id: 'nw-lift', label: L('Levantamiento', 'Lift'), value: nwell.lift, onChange: function (v) { setNwell(Object.assign({}, nwell, { lift: v })); }, options: LIFTS() }),
