@@ -960,6 +960,9 @@ function bname(k) { return BASKETS[k][LANG]; }
 
 var ICONS = {
   alert: [['path', { d: 'm21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3' }], ['path', { d: 'M12 9v4' }], ['path', { d: 'M12 17h.01' }]],
+  search: [['circle', { cx: 11, cy: 11, r: 8 }], ['path', { d: 'm21 21-4.3-4.3' }]],
+  file: [['path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }], ['path', { d: 'M14 2v6h6' }]],
+  x: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]],
   ban: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'm4.9 4.9 14.2 14.2' }]],
   timer: [['line', { x1: 10, x2: 14, y1: 2, y2: 2 }], ['line', { x1: 12, x2: 15, y1: 14, y2: 11 }], ['circle', { cx: 12, cy: 14, r: 8 }]],
   trend: [['polyline', { points: '22 7 13.5 15.5 8.5 10.5 2 17' }], ['polyline', { points: '16 7 22 7 22 13' }]],
@@ -2883,6 +2886,394 @@ function FieldTab(p) {
     sec(L('Fuentes', 'Sources'), h('ol', { style: { paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 } }, FC_SRC.map(function (s, i) { return h('li', { key: i, className: 'hint' }, s[0] + (s[1] ? ' ' : ''), s[1] ? h('span', { className: 'mono', style: { wordBreak: 'break-all' } }, s[1]) : null); })), true));
 }
 
+/* ================= BIBLIOTECA TÉCNICA · motor (extracción, búsqueda, ZIP, almacenamiento) ================= */
+var LIB_MAX_TEXT = 600000, LIB_MAX_BYTES = 45 * 1024 * 1024;
+function libFold(s) { return String(s || '').replace(/[À-ɏ]/g, function (c) { return c.normalize('NFD').charAt(0); }).toLowerCase(); }
+function libTerms(q) { var out = [], re = /"([^"]+)"|(\S+)/g, m; while ((m = re.exec(q || ''))) { var t = libFold(m[1] || m[2]).trim(); if (t) out.push(t); } return out; }
+function libCount(hay, term, cap) { var n = 0, i = 0; while (n < cap && (i = hay.indexOf(term, i)) >= 0) { n++; i += term.length; } return n; }
+function libExt(name) { var m = /\.([a-z0-9]+)$/i.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
+function libSize(b) { return b >= 1048576 ? nf(b / 1048576, 1) + ' MB' : nf(Math.max(1, b / 1024), 0) + ' KB'; }
+var LIB_MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+function libTipos() { return [['estudio', L('Estudio', 'Study')], ['informe', L('Informe técnico', 'Technical report')], ['pozo', L('Informe de pozo', 'Well report')], ['mapa', L('Mapa / plano', 'Map / drawing')], ['procedimiento', L('Procedimiento', 'Procedure')], ['presentacion', L('Presentación', 'Presentation')], ['norma', L('Norma / estándar', 'Standard')], ['paper', L('Publicación / paper', 'Paper')], ['datos', L('Datos / hoja de cálculo', 'Data / spreadsheet')], ['otro', L('Otro', 'Other')]]; }
+function libTipoName(k) { var t = libTipos().filter(function (x) { return x[0] === k; })[0]; return t ? t[1] : (k || '—'); }
+
+/* ---- ZIP (lectura mínima de .docx/.xlsx y escritura sin compresión) ---- */
+function libZipList(buf) {
+  var dv = new DataView(buf), n = buf.byteLength, i, eocd = -1;
+  for (i = n - 22; i >= Math.max(0, n - 65557); i--) { if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error('zip');
+  var cnt = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true), out = {}, k;
+  for (k = 0; k < cnt; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    var nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    var name = new TextDecoder().decode(new Uint8Array(buf, p + 46, nl));
+    out[name] = { method: dv.getUint16(p + 10, true), csize: dv.getUint32(p + 20, true), lo: dv.getUint32(p + 42, true) };
+    p += 46 + nl + xl + cl;
+  }
+  return out;
+}
+async function libZipRead(buf, e) {
+  var dv = new DataView(buf), nl = dv.getUint16(e.lo + 26, true), xl = dv.getUint16(e.lo + 28, true), st = e.lo + 30 + nl + xl;
+  var raw = new Uint8Array(buf, st, e.csize);
+  if (e.method === 0) return raw;
+  if (e.method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('inflate');
+  var r = new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')));
+  return new Uint8Array(await r.arrayBuffer());
+}
+var LIB_CRC = null;
+function libCrc(u8) {
+  if (!LIB_CRC) { LIB_CRC = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); LIB_CRC[n] = c >>> 0; } }
+  var c2 = 0xFFFFFFFF; for (var i = 0; i < u8.length; i++) c2 = LIB_CRC[(c2 ^ u8[i]) & 255] ^ (c2 >>> 8);
+  return (c2 ^ 0xFFFFFFFF) >>> 0;
+}
+function libZipBuild(files) {
+  var enc = new TextEncoder(), chunks = [], cd = [], off = 0, now = new Date();
+  var dt = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate(), tm = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  files.forEach(function (f) {
+    var nm = enc.encode(f.name), crc = libCrc(f.data), len = f.data.length;
+    var lh = new Uint8Array(30 + nm.length), v = new DataView(lh.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true); v.setUint16(8, 0, true); v.setUint16(10, tm, true); v.setUint16(12, dt, true);
+    v.setUint32(14, crc, true); v.setUint32(18, len, true); v.setUint32(22, len, true); v.setUint16(26, nm.length, true); v.setUint16(28, 0, true); lh.set(nm, 30);
+    chunks.push(lh, f.data);
+    var ch = new Uint8Array(46 + nm.length), c = new DataView(ch.buffer);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true); c.setUint16(12, tm, true); c.setUint16(14, dt, true);
+    c.setUint32(16, crc, true); c.setUint32(20, len, true); c.setUint32(24, len, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true); ch.set(nm, 46);
+    cd.push(ch); off += lh.length + len;
+  });
+  var cdSize = cd.reduce(function (a, b) { return a + b.length; }, 0), end = new Uint8Array(22), e = new DataView(end.buffer);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cdSize, true); e.setUint32(16, off, true);
+  return new Blob(chunks.concat(cd, [end]), { type: 'application/zip' });
+}
+
+/* ---- extracción de texto ---- */
+function libEnt(s) { return s.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos);/gi, function (m, g) { var l = g.toLowerCase(); if (l === 'amp') return '&'; if (l === 'lt') return '<'; if (l === 'gt') return '>'; if (l === 'quot') return '"'; if (l === 'apos') return "'"; var cp = l.charAt(1) === 'x' ? parseInt(l.slice(2), 16) : parseInt(l.slice(1), 10); try { return String.fromCodePoint(cp); } catch (e) { return ''; } }); }
+async function libDocxText(buf) {
+  var z = libZipList(buf), e = z['word/document.xml']; if (!e) throw new Error('docx');
+  var xml = new TextDecoder().decode(await libZipRead(buf, e));
+  return libEnt(xml.replace(/<w:tab\s*\/>/g, ' ').replace(/<w:br\s*\/>/g, '\n').replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+}
+async function libXlsxText(buf) {
+  var z = libZipList(buf), dec = new TextDecoder(), out = [], m;
+  if (z['xl/workbook.xml']) { var wb = dec.decode(await libZipRead(buf, z['xl/workbook.xml'])), re = /<sheet\b[^>]*\bname="([^"]*)"/g; while ((m = re.exec(wb))) out.push('[' + libEnt(m[1]) + ']'); }
+  if (z['xl/sharedStrings.xml']) {
+    var ss = dec.decode(await libZipRead(buf, z['xl/sharedStrings.xml'])), items = ss.split('</si>');
+    items.forEach(function (it) { var t = '', r = /<t\b[^>]*>([\s\S]*?)<\/t>/g, mm; while ((mm = r.exec(it))) t += mm[1]; if (t) out.push(libEnt(t)); });
+  }
+  Object.keys(z).filter(function (k) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(k); }).forEach(function (k) { z[k].p = libZipRead(buf, z[k]); });
+  var names = Object.keys(z).filter(function (k) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(k); });
+  for (var i = 0; i < names.length; i++) {
+    var sx = dec.decode(await z[names[i]].p), r2 = /<is>([\s\S]*?)<\/is>/g, m2;
+    while ((m2 = r2.exec(sx))) { var t2 = '', r3 = /<t\b[^>]*>([\s\S]*?)<\/t>/g, m3; while ((m3 = r3.exec(m2[1]))) t2 += m3[1]; if (t2) out.push(libEnt(t2)); }
+  }
+  return out.join('\n');
+}
+var LIB_PDF_BASES = ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/', 'https://unpkg.com/pdfjs-dist@3.11.174/build/'];
+var libPdfPromise = null;
+function libLoadPdfjs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (libPdfPromise) return libPdfPromise;
+  libPdfPromise = new Promise(function (res, rej) {
+    var i = 0;
+    (function next() {
+      if (i >= LIB_PDF_BASES.length) { libPdfPromise = null; rej(new Error('pdfjs')); return; }
+      var base = LIB_PDF_BASES[i++], s = document.createElement('script');
+      s.src = base + 'pdf.min.js';
+      s.onload = function () { if (window.pdfjsLib) { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js'; } catch (e) { } res(window.pdfjsLib); } else next(); };
+      s.onerror = function () { s.remove(); next(); };
+      document.head.appendChild(s);
+    })();
+  });
+  return libPdfPromise;
+}
+async function libPdfText(buf) {
+  var lib = await libLoadPdfjs(), pdf = await lib.getDocument({ data: new Uint8Array(buf.slice(0)) }).promise, parts = [], tot = 0, p, np = pdf.numPages;
+  for (p = 1; p <= np; p++) {
+    var pg = await pdf.getPage(p), tc = await pg.getTextContent(), s = '';
+    tc.items.forEach(function (it) { s += it.str + (it.hasEOL ? '\n' : ' '); });
+    s = s.replace(/[ \t]+/g, ' '); parts.push(s); tot += s.length;
+    try { pg.cleanup(); } catch (e) { }
+    if (tot > LIB_MAX_TEXT) break;
+  }
+  try { pdf.destroy(); } catch (e) { }
+  return { text: parts.join('\f'), pages: np };
+}
+async function libExtract(buf, ext) {
+  var r = { text: '', pages: null };
+  if (ext === 'pdf') r = await libPdfText(buf);
+  else if (ext === 'docx') r.text = await libDocxText(buf);
+  else if (ext === 'xlsx') r.text = await libXlsxText(buf);
+  if (r.text.length > LIB_MAX_TEXT) r.text = r.text.slice(0, LIB_MAX_TEXT);
+  return r;
+}
+
+/* ---- almacenamiento: Supabase Storage (versión compartida) o assets del artifact ---- */
+var LIBST = {
+  sb: function () { return window.__sb || null; },
+  put: async function (file, id, ext) {
+    var sb = LIBST.sb();
+    if (sb) {
+      var path = 'f/' + id + '.' + ext, r = await sb.storage.from('biblioteca').upload(path, file, { contentType: LIB_MIME[ext] || 'application/octet-stream', upsert: false });
+      if (r.error) throw r.error;
+      return { path: path };
+    }
+    var a = window.claude && window.claude.use ? await window.claude.use('assets') : null;
+    if (!a) throw { code: 'noassets', message: L('Este usuario no puede guardar archivos en esta vista.', 'This user cannot store files in this view.') };
+    var u = await a.upload(file);
+    return { assetId: u.id };
+  },
+  get: async function (m) {
+    var sb = LIBST.sb();
+    if (m.path && sb) { var r = await sb.storage.from('biblioteca').download(m.path); if (r.error) throw r.error; return r.data; }
+    if (m.assetId) { var f = await fetch('/_blob/' + m.assetId); if (!f.ok) throw new Error('blob ' + f.status); return await f.blob(); }
+    throw new Error('sin archivo');
+  },
+  del: async function (m) {
+    var sb = LIBST.sb();
+    if (m.path && sb) { var r = await sb.storage.from('biblioteca').remove([m.path]); if (r.error) throw r.error; if (!r.data || !r.data.length) throw { message: L('Sin permiso para borrar el archivo.', 'No permission to delete the file.') }; return; }
+    if (m.assetId) { var a = await window.claude.use('assets'); if (a) await a.delete(m.assetId); }
+  }
+};
+
+/* ---- búsqueda ---- */
+function libSearch(lib, txt, q, scope, tipo, fmt) {
+  var terms = libTerms(q), out = [];
+  lib.forEach(function (d) {
+    if (tipo && d.tipo !== tipo) return;
+    if (fmt && d.ext !== fmt) return;
+    if (!terms.length) { out.push({ d: d, score: 0, hits: 0, nameHit: false }); return; }
+    var nm = libFold(d.name), body = (scope !== 'name' && txt && txt[d.id]) ? libFold(txt[d.id]) : '', score = 0, hits = 0, nameHit = false, ok = true;
+    for (var i = 0; i < terms.length; i++) {
+      var inName = scope !== 'content' && nm.indexOf(terms[i]) >= 0, c = body ? libCount(body, terms[i], 99) : 0;
+      if (!inName && !c) { ok = false; break; }
+      if (inName) { score += 50; nameHit = true; }
+      score += c; hits += c;
+    }
+    if (ok) out.push({ d: d, score: score, hits: hits, nameHit: nameHit });
+  });
+  out.sort(function (a, b) { return b.score - a.score || (a.d.name < b.d.name ? -1 : 1); });
+  return out;
+}
+function libSnippets(text, terms, max) {
+  var f = libFold(text), out = [], used = -1e9, pos = [];
+  terms.forEach(function (tm) { var k = 0, ix, n = 0; while (n < 40 && (ix = f.indexOf(tm, k)) >= 0) { pos.push(ix); k = ix + tm.length; n++; } });
+  pos.sort(function (a, b) { return a - b; });
+  for (var i = 0; i < pos.length && out.length < max; i++) {
+    if (pos[i] - used < 200) continue;
+    var a = Math.max(0, pos[i] - 90), b = Math.min(text.length, pos[i] + 110);
+    var page = text.slice(0, pos[i]).split('\f').length;
+    out.push({ s: (a > 0 ? '…' : '') + text.slice(a, b).replace(/[\f\n]+/g, ' ') + (b < text.length ? '…' : ''), page: page, paged: text.indexOf('\f') >= 0 });
+    used = pos[i];
+  }
+  return out;
+}
+function libHighlight(text, terms) {
+  if (!terms.length) return [text];
+  var f = libFold(text), ranges = [], i;
+  terms.forEach(function (tm) { var k = 0, ix; while ((ix = f.indexOf(tm, k)) >= 0 && ranges.length < 400) { ranges.push([ix, ix + tm.length]); k = ix + tm.length; } });
+  ranges.sort(function (a, b) { return a[0] - b[0]; });
+  var out = [], cur = 0;
+  for (i = 0; i < ranges.length; i++) {
+    var r = ranges[i]; if (r[0] < cur) { if (r[1] > cur) { out.push(h('mark', { key: 'm' + i, style: { background: 'rgba(240,165,64,.35)', color: 'inherit', borderRadius: 2, padding: '0 1px' } }, text.slice(cur, r[1]))); cur = r[1]; } continue; }
+    if (r[0] > cur) out.push(text.slice(cur, r[0]));
+    out.push(h('mark', { key: 'm' + i, style: { background: 'rgba(240,165,64,.35)', color: 'inherit', borderRadius: 2, padding: '0 1px' } }, text.slice(r[0], r[1]))); cur = r[1];
+  }
+  if (cur < text.length) out.push(text.slice(cur));
+  return out;
+}
+
+/* ================= BIBLIOTECA TÉCNICA · pestaña ================= */
+function LibTab(p) {
+  var lib = (p.lib || []).filter(function (d) { return d && d.name; });
+  var role = window.OPT_ROLE || '';
+  var canUp = p.canWrite !== false && (!role || role === 'admin' || role === 'analista');
+  var canDel = !role || role === 'admin';
+  var s1 = useState(''), q = s1[0], setQ = s1[1];
+  var s2 = useState(''), dq = s2[0], setDq = s2[1];
+  var s3 = useState('both'), scope = s3[0], setScope = s3[1];
+  var s4 = useState(''), tipoF = s4[0], setTipoF = s4[1];
+  var s5 = useState(''), fmtF = s5[0], setFmtF = s5[1];
+  var s6 = useState({}), sel = s6[0], setSel = s6[1];
+  var s7 = useState(null), prevId = s7[0], setPrevId = s7[1];
+  var s8 = useState([]), ups = s8[0], setUps = s8[1];
+  var s9 = useState('informe'), uTipo = s9[0], setUTipo = s9[1];
+  var s10 = useState({}), txt = s10[0], setTxt = s10[1];
+  var s11 = useState(false), needTxt = s11[0], setNeedTxt = s11[1];
+  var s12 = useState(40), shown = s12[0], setShown = s12[1];
+  var s13 = useState('orig'), pView = s13[0], setPView = s13[1];
+  var s14 = useState({ url: '', err: '', busy: false }), pBlob = s14[0], setPBlob = s14[1];
+  var s15 = useState(false), drag = s15[0], setDrag = s15[1];
+
+  useEffect(function () { var t = setTimeout(function () { setDq(q); setShown(40); }, 180); return function () { clearTimeout(t); }; }, [q]);
+  useEffect(function () { if ((dq && scope !== 'name') || prevId) setNeedTxt(true); }, [dq, scope, prevId]);
+  useEffect(function () {
+    if (!needTxt) return;
+    var alive = true, un = null;
+    (async function () {
+      var cl = window.claude, d = null;
+      try { d = cl && cl.use ? await cl.use('db') : null; } catch (e) { d = null; }
+      if (!d || !alive) return;
+      try {
+        un = d.collection('libtext').onSnapshot(function (snap) {
+          var m = {}; snap.docs.forEach(function (x) { m[x.id] = (x.data() || {}).text || ''; });
+          if (alive) setTxt(m);
+        }, function () { });
+      } catch (e) { }
+    })();
+    return function () { alive = false; if (un) { try { un(); } catch (e) { } } };
+  }, [needTxt]);
+
+  var terms = useMemo(function () { return libTerms(dq); }, [dq]);
+  var results = useMemo(function () { return libSearch(lib, txt, dq, scope, tipoF, fmtF); }, [lib, txt, dq, scope, tipoF, fmtF]);
+  var vis = results.slice(0, shown);
+  var snips = useMemo(function () {
+    var o = {}; if (!terms.length || scope === 'name') return o;
+    results.slice(0, shown).forEach(function (r) { if (txt[r.d.id]) o[r.d.id] = libSnippets(txt[r.d.id], terms, 2); });
+    return o;
+  }, [results, shown, terms, txt, scope]);
+  var byId = {}; lib.forEach(function (d) { byId[d.id] = d; });
+  var selIds = Object.keys(sel).filter(function (k) { return sel[k] && byId[k]; });
+  var totalSize = lib.reduce(function (a, d) { return a + (d.size || 0); }, 0);
+  var loadingTxt = !!dq && scope !== 'name' && lib.some(function (d) { return !d.noText && txt[d.id] === undefined; });
+
+  var doUpload = async function (files) {
+    files = [].slice.call(files || []); if (!files.length) return;
+    var cur = files.map(function (f) { return { name: f.name, st: 'wait', msg: '' }; }); setUps(cur);
+    var mark = function (i, st, msg) { cur = cur.map(function (x, k) { return k === i ? { name: x.name, st: st, msg: msg || '' } : x; }); setUps(cur); };
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i], ext = libExt(f.name);
+      if (['pdf', 'docx', 'xlsx'].indexOf(ext) < 0) { mark(i, 'err', L('Formato no admitido: usa PDF, DOCX o XLSX.', 'Unsupported format: use PDF, DOCX or XLSX.')); continue; }
+      if (f.size > LIB_MAX_BYTES) { mark(i, 'err', L('Supera el máximo de 45 MB.', 'Exceeds the 45 MB limit.')); continue; }
+      if (lib.some(function (x) { return x.name === f.name && x.size === f.size; })) { mark(i, 'skip', L('Ya está en la biblioteca.', 'Already in the library.')); continue; }
+      var id = uid();
+      try {
+        mark(i, 'run', L('Leyendo e indexando…', 'Reading and indexing…'));
+        var buf = await f.arrayBuffer(), ex = { text: '', pages: null };
+        try { ex = await libExtract(buf, ext); } catch (e) { ex = { text: '', pages: null }; }
+        mark(i, 'run', L('Subiendo…', 'Uploading…'));
+        var st = await LIBST.put(f, id, ext);
+        var usr = window.OPT_USER || {};
+        var meta = { name: f.name, ext: ext, size: f.size, tipo: uTipo, by: usr.disp || usr.email || '', date: today(), pages: ex.pages, chars: ex.text.length, noText: !(ex.text && ex.text.replace(/\s/g, '').length > 30) };
+        if (st.path) meta.path = st.path; if (st.assetId) meta.assetId = st.assetId;
+        var ok = await p.save('library', id, meta);
+        if (ok && ex.text) await p.save('libtext', id, { text: ex.text });
+        if (!ok) mark(i, 'err', L('No se pudo registrar el documento.', 'Could not register the document.'));
+        else mark(i, 'ok', meta.noText ? L('Subido, pero sin texto legible (¿escaneado?): se busca solo por nombre.', 'Uploaded, but no readable text (scanned?): searchable by name only.') : '');
+      } catch (e) { mark(i, 'err', (e && e.message) || L('Error al subir.', 'Upload error.')); }
+    }
+  };
+  var dlOne = function (d) { p.runExport(async function () { var b = await LIBST.get(d); await saveFile(d.name, b); }, L('Descargado: ', 'Downloaded: ') + d.name); };
+  var dlZip = function () {
+    p.runExport(async function () {
+      var files = [], used = {};
+      for (var i = 0; i < selIds.length; i++) {
+        var d = byId[selIds[i]], b = await LIBST.get(d), u8 = new Uint8Array(await b.arrayBuffer()), nm = d.name;
+        if (used[nm]) { nm = nm.replace(/(\.[^.]*)?$/, ' (' + used[nm] + ')$1'); used[d.name]++; } else used[nm] = 1;
+        files.push({ name: nm, data: u8 });
+      }
+      await saveFile('Biblioteca_Optimax_' + today() + '.zip', libZipBuild(files));
+    }, selIds.length + L(' documento(s) en un ZIP.', ' document(s) in a ZIP.'));
+  };
+  var delOne = async function (d) {
+    try { await LIBST.del(d); } catch (e) { p.toast(L('No se pudo borrar el archivo: ', 'Could not delete the file: ') + ((e && e.message) || '')); return; }
+    await p.remove('library', d.id); await p.remove('libtext', d.id);
+    setSel(function (s) { var n = Object.assign({}, s); delete n[d.id]; return n; });
+    if (prevId === d.id) setPrevId(null);
+  };
+  var openPrev = function (d) { setPView(d.ext === 'pdf' ? 'orig' : 'text'); setPrevId(d.id); };
+  var pd = prevId ? byId[prevId] : null;
+  useEffect(function () {
+    if (!pd || pd.ext !== 'pdf') { setPBlob({ url: '', err: '', busy: false }); return; }
+    var alive = true, url = '';
+    setPBlob({ url: '', err: '', busy: true });
+    LIBST.get(pd).then(function (b) { if (!alive) return; url = URL.createObjectURL(new Blob([b], { type: 'application/pdf' })); setPBlob({ url: url, err: '', busy: false }); })
+      .catch(function (e) { if (alive) setPBlob({ url: '', err: (e && e.message) || 'error', busy: false }); });
+    return function () { alive = false; if (url) { try { URL.revokeObjectURL(url); } catch (e) { } } };
+  }, [prevId]);
+
+  var stColor = { ok: 'var(--good)', err: 'var(--crit)', skip: 'var(--warn)', run: 'var(--info)', wait: 'var(--muted)' };
+  var fmtOpts = [['', L('Todos los formatos', 'All formats')], ['pdf', 'PDF'], ['docx', 'Word (DOCX)'], ['xlsx', 'Excel (XLSX)']];
+  var tipoOpts = [['', L('Todos los tipos', 'All types')]].concat(libTipos());
+
+  var prevPanel = null;
+  if (pd) {
+    var ptext = txt[pd.id], pages = ptext ? ptext.split('\f') : [], pageEls = [];
+    if (ptext !== undefined) {
+      var idxs = pages.map(function (_, i) { return i; });
+      if (terms.length) idxs = idxs.filter(function (i) { var f = libFold(pages[i]); return terms.some(function (t) { return f.indexOf(t) >= 0; }); });
+      idxs.slice(0, 40).forEach(function (i) {
+        pageEls.push(h('div', { key: 'pg' + i, className: 'panel2 p-3', style: { marginBottom: 8 } },
+          pages.length > 1 ? h('div', { className: 'eyebrow', style: { marginBottom: 4 } }, L('Página ', 'Page ') + (i + 1)) : null,
+          h('div', { style: { whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.55, overflowWrap: 'anywhere' } }, libHighlight(pages[i], terms))));
+      });
+      if (!pageEls.length) pageEls.push(h('div', { key: 'none', className: 'hint' }, terms.length ? L('Las palabras buscadas no aparecen en este documento.', 'The searched words do not appear in this document.') : L('Este documento no tiene texto legible.', 'This document has no readable text.')));
+      else if (idxs.length > 40) pageEls.push(h('div', { key: 'more', className: 'hint' }, L('Mostrando 40 de ', 'Showing 40 of ') + idxs.length + L(' páginas.', ' pages.')));
+    }
+    prevPanel = h('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': pd.name, style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, background: 'rgba(4,8,10,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10 }, onClick: function (e) { if (e.target === e.currentTarget) setPrevId(null); } },
+      h('div', { className: 'panel', style: { width: 'min(1100px,100%)', height: 'min(90vh,920px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
+        h('div', { className: 'flex flex-wrap items-center gap-2', style: { padding: '10px 12px', borderBottom: '1px solid var(--line)' } },
+          h('div', { style: { flex: '1 1 220px', minWidth: 0, fontWeight: 600, overflowWrap: 'anywhere' } }, pd.name),
+          h('div', { className: 'seg' }, h('button', { type: 'button', className: 'btn', 'aria-pressed': pView === 'orig', onClick: function () { setPView('orig'); } }, L('Original', 'Original')), h('button', { type: 'button', className: 'btn', 'aria-pressed': pView === 'text', onClick: function () { setPView('text'); } }, L('Texto', 'Text'))),
+          h('button', { type: 'button', className: 'btn2', onClick: function () { dlOne(pd); } }, h(Icon, { n: 'download', s: 14 }), L('Descargar', 'Download')),
+          h('button', { type: 'button', className: 'btn2', onClick: function () { setPrevId(null); } }, h(Icon, { n: 'x', s: 14 }), L('Cerrar', 'Close'))),
+        h('div', { style: { flex: 1, minHeight: 0, overflow: 'auto', padding: pView === 'text' ? 12 : 0, display: 'flex', flexDirection: 'column' } },
+          pView === 'orig'
+            ? (pd.ext !== 'pdf' ? h('div', { className: 'hint', style: { padding: 16 } }, L('La vista original solo está disponible para PDF. Usa "Texto" para ver el contenido o descarga el archivo.', 'The original view is only available for PDF. Use "Text" to read the content or download the file.'))
+              : pBlob.url ? h('iframe', { src: pBlob.url, title: pd.name, style: { flex: 1, width: '100%', border: 0, background: '#fff', minHeight: 300 } })
+              : h('div', { className: 'hint', style: { padding: 16 } }, pBlob.err ? L('No se pudo abrir el PDF: ', 'Could not open the PDF: ') + pBlob.err : L('Cargando PDF…', 'Loading PDF…')))
+            : (ptext === undefined ? h('div', { className: 'hint' }, pd.noText ? L('Este documento no tiene texto legible.', 'This document has no readable text.') : L('Cargando texto…', 'Loading text…')) : pageEls)),
+        pView === 'orig' && pBlob.url ? h('div', { className: 'hint', style: { padding: '6px 12px', margin: 0, borderTop: '1px solid var(--line)' } }, L('Si tu celular no muestra el PDF aquí, ', 'If your phone does not show the PDF here, '), h('a', { href: pBlob.url, target: '_blank', rel: 'noopener', style: { color: 'var(--accent)' } }, L('ábrelo en una pestaña nueva', 'open it in a new tab')), '.') : null));
+  }
+
+  return h('div', { className: 'flex flex-col gap-4' },
+    h('section', { className: 'panel p-4 flex flex-col gap-3' },
+      h('div', { className: 'flex flex-wrap items-baseline justify-between gap-2' },
+        h('div', { className: 'eyebrow' }, L('Biblioteca de documentos técnicos', 'Technical document library')),
+        h('div', { className: 'hint', style: { margin: 0 } }, nf(lib.length) + L(' documentos · ', ' documents · ') + libSize(totalSize))),
+      p.persist === false ? h(Banner, null, L('Modo local: la biblioteca no se guarda en esta vista.', 'Local mode: the library is not saved in this view.')) : null,
+      canUp ? h('div', { className: 'flex flex-col gap-3', onDragOver: function (e) { e.preventDefault(); setDrag(true); }, onDragLeave: function () { setDrag(false); }, onDrop: function (e) { e.preventDefault(); setDrag(false); doUpload(e.dataTransfer && e.dataTransfer.files); }, style: { border: '1px dashed ' + (drag ? 'var(--accent)' : 'var(--line)'), borderRadius: 8, padding: 12 } },
+        h('div', { className: 'grid gap-3 items-end', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' } },
+          h(SelIn, { id: 'lib-utipo', label: L('Tipo de documento (para los archivos que subas ahora)', 'Document type (for the files you upload now)'), value: uTipo, onChange: setUTipo, options: libTipos() }),
+          h('div', null, h('label', { className: 'btn2 prim', style: { cursor: 'pointer', display: 'inline-flex' } }, h(Icon, { n: 'upload', s: 14 }), L('Elegir archivos', 'Choose files'),
+            h('input', { id: 'lib-file', type: 'file', multiple: true, accept: '.pdf,.docx,.xlsx', style: { display: 'none' }, onChange: function (e) { var fl = e.target.files; doUpload(fl); try { e.target.value = ''; } catch (er) { } } })))),
+        h('div', { className: 'hint', style: { margin: 0 } }, L('También puedes arrastrar los archivos aquí. Formatos: PDF, Word (.docx) y Excel (.xlsx), hasta 45 MB cada uno. Se lee el texto de cada documento para poder buscar dentro de él.', 'You can also drag files here. Formats: PDF, Word (.docx) and Excel (.xlsx), up to 45 MB each. The text of each document is read so you can search inside it.')))
+        : h('div', { className: 'hint', style: { margin: 0 } }, L('Tu rol permite buscar, ver y descargar documentos.', 'Your role lets you search, preview and download documents.')),
+      ups.length ? h('div', { className: 'flex flex-col gap-1' }, ups.map(function (u, i) { return h('div', { key: i, className: 'hint', style: { margin: 0, color: stColor[u.st] } }, (u.st === 'ok' ? '✔ ' : u.st === 'err' ? '✖ ' : u.st === 'skip' ? '• ' : '… ') + u.name + (u.msg ? ' — ' + u.msg : '')); })) : null),
+    h('section', { className: 'panel p-4 flex flex-col gap-3' },
+      h('div', { className: 'grid gap-3 items-end', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' } },
+        h('div', { style: { gridColumn: 'span 2', minWidth: 0 } }, h(TxtIn, { id: 'lib-q', label: L('Buscar', 'Search'), value: q, ph: L('palabras clave, nombre o frase entre comillas…', 'keywords, file name or "quoted phrase"…'), onChange: setQ })),
+        h(SelIn, { id: 'lib-scope', label: L('Buscar en', 'Search in'), value: scope, onChange: setScope, options: [['both', L('Nombre y contenido', 'Name and content')], ['name', L('Solo el nombre del archivo', 'File name only')], ['content', L('Solo el contenido', 'Content only')]] }),
+        h(SelIn, { id: 'lib-tipo', label: L('Tipo', 'Type'), value: tipoF, onChange: setTipoF, options: tipoOpts }),
+        h(SelIn, { id: 'lib-fmt', label: L('Formato', 'Format'), value: fmtF, onChange: setFmtF, options: fmtOpts })),
+      h('div', { className: 'hint', style: { margin: 0 } }, L('Con varias palabras, el documento debe contener todas. No distingue mayúsculas ni acentos.', 'With several words, the document must contain all of them. Case and accents are ignored.'), loadingTxt ? h('span', { style: { color: 'var(--info)' } }, ' ' + L('Cargando el contenido de los documentos…', 'Loading document content…')) : null)),
+    h('section', { className: 'flex flex-wrap items-center justify-between gap-2' },
+      h('div', { className: 'mono', style: { fontSize: 13 } }, nf(results.length) + (dq || tipoF || fmtF ? L(' resultado(s)', ' result(s)') : L(' documento(s)', ' document(s)')) + (selIds.length ? ' · ' + selIds.length + L(' seleccionado(s)', ' selected') : '')),
+      h('div', { className: 'flex flex-wrap items-center gap-2' },
+        h('button', { type: 'button', className: 'btn2', disabled: !results.length, onClick: function () { setSel(function (s) { var n = Object.assign({}, s); results.forEach(function (r) { n[r.d.id] = true; }); return n; }); } }, L('Seleccionar todos los resultados', 'Select all results')),
+        h('button', { type: 'button', className: 'btn2', disabled: !selIds.length, onClick: function () { setSel({}); } }, L('Limpiar selección', 'Clear selection')),
+        h('button', { type: 'button', className: 'btn2 prim', disabled: !selIds.length, onClick: dlZip }, h(Icon, { n: 'download', s: 14 }), L('Descargar ZIP', 'Download ZIP') + (selIds.length ? ' (' + selIds.length + ')' : '')))),
+    !results.length ? h('div', { className: 'panel p-4 hint' }, lib.length ? L('Ningún documento coincide con la búsqueda.', 'No document matches the search.') : (canUp ? L('La biblioteca está vacía. Sube el primer documento arriba.', 'The library is empty. Upload the first document above.') : L('La biblioteca está vacía.', 'The library is empty.')))
+      : h('div', { className: 'flex flex-col gap-2' }, vis.map(function (r) {
+        var d = r.d, sn = snips[d.id] || [];
+        return h('div', { key: d.id, className: 'panel2 p-3', style: { display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' } },
+          h('input', { type: 'checkbox', checked: !!sel[d.id], 'aria-label': L('Seleccionar ', 'Select ') + d.name, style: { marginTop: 5 }, onChange: function (e) { var on = e.target.checked; setSel(function (s) { var n = Object.assign({}, s); n[d.id] = on; return n; }); } }),
+          h('div', { style: { flex: '1 1 260px', minWidth: 0 } },
+            h('div', { className: 'flex flex-wrap items-center gap-2' },
+              h('button', { type: 'button', className: 'lnk', style: { textAlign: 'left', overflowWrap: 'anywhere', fontWeight: 600 }, onClick: function () { openPrev(d); } }, scope === 'content' ? d.name : libHighlight(d.name, terms)),
+              canUp ? h('select', { 'aria-label': L('Tipo de documento', 'Document type'), className: 'in', style: { width: 'auto', padding: '2px 6px', fontSize: 12 }, value: d.tipo || 'otro', onChange: function (e) { p.save('library', d.id, Object.assign({}, d, { tipo: e.target.value })); } }, libTipos().map(function (t) { return h('option', { key: t[0], value: t[0] }, t[1]); })) : h(Chip, { color: 'var(--info)' }, libTipoName(d.tipo)),
+              h(Chip, null, (d.ext || '').toUpperCase()),
+              r.hits ? h(Chip, { color: 'var(--accent)' }, r.hits + (r.hits >= 99 ? '+' : '') + L(' coincidencias', ' matches')) : null,
+              d.noText ? h(Chip, { color: 'var(--warn)' }, L('sin texto', 'no text')) : null),
+            h('div', { className: 'hint', style: { margin: '2px 0 0' } }, libSize(d.size || 0) + (d.pages ? ' · ' + d.pages + L(' pág.', ' pp.') : '') + (d.date ? ' · ' + d.date : '') + (d.by ? ' · ' + d.by : '')),
+            sn.map(function (s, i) { return h('div', { key: i, style: { marginTop: 6, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, overflowWrap: 'anywhere' } }, s.paged ? h('span', { className: 'mono', style: { marginRight: 6 } }, L('p. ', 'p. ') + s.page) : null, libHighlight(s.s, terms)); })),
+          h('div', { className: 'flex flex-wrap gap-2' },
+            h('button', { type: 'button', className: 'btn2', onClick: function () { openPrev(d); } }, h(Icon, { n: 'file', s: 14 }), L('Vista previa', 'Preview')),
+            h('button', { type: 'button', className: 'btn2', onClick: function () { dlOne(d); } }, h(Icon, { n: 'download', s: 14 }), L('Descargar', 'Download')),
+            canDel ? h(ConfirmBtn, { label: L('Eliminar', 'Delete'), confirmLabel: L('Confirmar', 'Confirm'), onConfirm: function () { delOne(d); } }) : null));
+      })),
+    results.length > shown ? h('div', null, h('button', { type: 'button', className: 'btn2', onClick: function () { setShown(shown + 40); } }, L('Mostrar más (', 'Show more (') + (results.length - shown) + ')')) : null,
+    prevPanel);
+}
+
 /* ================= OPTIMAX COMPONENTS ================= */
 var BANNER_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 560 170\" preserveAspectRatio=\"xMaxYMax meet\" role=\"presentation\" focusable=\"false\"><defs><radialGradient id=\"bnGlow\" cx=\"330\" cy=\"124\" r=\"190\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#f0a540\" stop-opacity=\".50\"/><stop offset=\".45\" stop-color=\"#e0702a\" stop-opacity=\".16\"/><stop offset=\"1\" stop-color=\"#e0702a\" stop-opacity=\"0\"/></radialGradient><linearGradient id=\"bnSun\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ffd27a\"/><stop offset=\"1\" stop-color=\"#f0a540\"/></linearGradient><linearGradient id=\"bnWater\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#f0a540\" stop-opacity=\".22\"/><stop offset=\"1\" stop-color=\"#4aa8c9\" stop-opacity=\"0\"/></linearGradient><linearGradient id=\"bnRef\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#f0a540\" stop-opacity=\".35\"/><stop offset=\"1\" stop-color=\"#f0a540\" stop-opacity=\"0\"/></linearGradient></defs><rect x=\"0\" y=\"0\" width=\"560\" height=\"170\" fill=\"url(#bnGlow)\"/><g fill=\"#e8eff2\" opacity=\".55\"><circle cx=\"410\" cy=\"22\" r=\"1\"/><circle cx=\"470\" cy=\"38\" r=\".8\"/><circle cx=\"515\" cy=\"18\" r=\"1\"/><circle cx=\"545\" cy=\"46\" r=\".8\"/><circle cx=\"380\" cy=\"40\" r=\".7\"/></g><path d=\"M278 124 A52 52 0 0 1 382 124 Z\" fill=\"url(#bnSun)\" opacity=\".9\"/><g stroke=\"#0c1519\" stroke-width=\"2.2\" opacity=\".55\"><line x1=\"270\" y1=\"104\" x2=\"392\" y2=\"104\"/><line x1=\"270\" y1=\"112\" x2=\"392\" y2=\"112\"/><line x1=\"270\" y1=\"118\" x2=\"392\" y2=\"118\"/></g><rect x=\"0\" y=\"124\" width=\"560\" height=\"46\" fill=\"url(#bnWater)\"/><line x1=\"0\" y1=\"124\" x2=\"560\" y2=\"124\" stroke=\"#f0a540\" stroke-opacity=\".5\" stroke-width=\"1\"/><g stroke=\"#f0a540\" stroke-linecap=\"round\" stroke-opacity=\".35\" stroke-width=\"1\"><line x1=\"300\" y1=\"131\" x2=\"372\" y2=\"131\"/><line x1=\"312\" y1=\"138\" x2=\"362\" y2=\"138\"/><line x1=\"322\" y1=\"146\" x2=\"352\" y2=\"146\"/><line x1=\"420\" y1=\"130\" x2=\"480\" y2=\"130\"/><line x1=\"492\" y1=\"136\" x2=\"540\" y2=\"136\"/><line x1=\"60\" y1=\"133\" x2=\"140\" y2=\"133\"/></g><g class=\"bn-derrick\" stroke=\"#6f8b99\" stroke-width=\"1.5\" fill=\"none\" stroke-linejoin=\"round\"><line x1=\"82\" y1=\"124\" x2=\"103\" y2=\"26\"/><line x1=\"138\" y1=\"124\" x2=\"117\" y2=\"26\"/><polyline points=\"82,124 132.9,100 92.3,76 122.6,52 103,26\"/><line x1=\"87.1\" y1=\"100\" x2=\"132.9\" y2=\"100\"/><line x1=\"92.3\" y1=\"76\" x2=\"127.7\" y2=\"76\"/><line x1=\"97.4\" y1=\"52\" x2=\"122.6\" y2=\"52\"/><rect x=\"100\" y=\"19\" width=\"20\" height=\"7\" fill=\"#0c1519\"/><line x1=\"110\" y1=\"19\" x2=\"110\" y2=\"10\"/><circle cx=\"110\" cy=\"9\" r=\"1.6\" fill=\"#f0a540\" stroke=\"none\"/><line x1=\"60\" y1=\"124\" x2=\"160\" y2=\"124\" stroke-width=\"2\"/></g><g fill=\"#06090b\" stroke=\"#6f8b99\" stroke-width=\".8\" stroke-linejoin=\"round\"><rect x=\"226\" y=\"118\" width=\"124\" height=\"6\"/><rect x=\"232\" y=\"108\" width=\"7\" height=\"12\"/><polygon points=\"284,118 300,66 316,118 308,118 300,82 292,118\"/><g class=\"bn-rod\"><line x1=\"238\" y1=\"80\" x2=\"238\" y2=\"110\" stroke=\"#9fb3bd\" stroke-width=\"1.2\"/></g><g class=\"bn-beam\"><path d=\"M254 55 C238 56 232 66 233 80 L243 80 C243 71 247 66 254 65 L254 62 L346 62 L346 70 L254 70 Z\"/><rect x=\"338\" y=\"58\" width=\"16\" height=\"20\" rx=\"2\"/><circle cx=\"300\" cy=\"66\" r=\"3.4\" fill=\"#f0a540\" stroke=\"none\"/></g><rect x=\"348\" y=\"104\" width=\"22\" height=\"14\" rx=\"2\"/><circle cx=\"332\" cy=\"100\" r=\"11\"/><g class=\"bn-crank\"><path d=\"M332 100 L332 91 A9 9 0 0 1 341 100 Z\" fill=\"#6f8b99\" stroke=\"none\"/><circle cx=\"332\" cy=\"100\" r=\"2.2\" fill=\"#f0a540\" stroke=\"none\"/></g></g><g fill=\"#06090b\" stroke=\"#6f8b99\" stroke-width=\".8\" stroke-linejoin=\"round\"><rect x=\"408\" y=\"98\" width=\"64\" height=\"6\"/><g stroke-width=\"1\"><line x1=\"414\" y1=\"104\" x2=\"414\" y2=\"134\"/><line x1=\"428\" y1=\"104\" x2=\"428\" y2=\"134\"/><line x1=\"452\" y1=\"104\" x2=\"452\" y2=\"134\"/><line x1=\"466\" y1=\"104\" x2=\"466\" y2=\"134\"/><line x1=\"414\" y1=\"116\" x2=\"428\" y2=\"128\"/><line x1=\"428\" y1=\"116\" x2=\"414\" y2=\"128\"/><line x1=\"452\" y1=\"116\" x2=\"466\" y2=\"128\"/><line x1=\"466\" y1=\"116\" x2=\"452\" y2=\"128\"/></g><polygon points=\"430,98 436,56 442,98\"/><line x1=\"436\" y1=\"56\" x2=\"436\" y2=\"48\" stroke=\"#9fb3bd\"/><rect x=\"444\" y=\"86\" width=\"12\" height=\"12\"/><line x1=\"464\" y1=\"98\" x2=\"464\" y2=\"82\" stroke=\"#9fb3bd\" stroke-width=\"1.2\"/><rect x=\"490\" y=\"108\" width=\"44\" height=\"5\"/><g stroke-width=\"1\"><line x1=\"496\" y1=\"113\" x2=\"496\" y2=\"136\"/><line x1=\"528\" y1=\"113\" x2=\"528\" y2=\"136\"/><line x1=\"496\" y1=\"122\" x2=\"528\" y2=\"134\"/><line x1=\"528\" y1=\"122\" x2=\"496\" y2=\"134\"/></g><polygon points=\"506,108 511,78 516,108\"/><line x1=\"511\" y1=\"78\" x2=\"511\" y2=\"71\" stroke=\"#9fb3bd\"/></g><path class=\"bn-flame\" d=\"M464 81 C459 75 460 69 464 63 C465 68 470 71 469 76 C468 79 466 81 464 81 Z\" fill=\"#f0a540\"/><path class=\"bn-flame bn-flame2\" d=\"M464 80 C462 76 463 73 464 70 C466 73 467 76 464 80 Z\" fill=\"#ffd27a\"/><g stroke-linecap=\"round\"><line x1=\"414\" y1=\"134\" x2=\"414\" y2=\"158\" stroke=\"url(#bnRef)\" stroke-width=\"2\"/><line x1=\"466\" y1=\"134\" x2=\"466\" y2=\"158\" stroke=\"url(#bnRef)\" stroke-width=\"2\"/><line x1=\"496\" y1=\"136\" x2=\"496\" y2=\"160\" stroke=\"url(#bnRef)\" stroke-width=\"2\"/><line x1=\"238\" y1=\"124\" x2=\"238\" y2=\"150\" stroke=\"url(#bnRef)\" stroke-width=\"2\"/></g></svg>";
 var LIFTS = function () { return [['GL', 'Gas Lift'], ['ESP', L('BES / ESP', 'ESP')], ['PCP', L('BCP / PCP', 'PCP')], ['SRP', L('Bombeo mecánico', 'Beam pumping')], ['FL', L('Flujo natural', 'Natural flow')]]; };
@@ -3774,7 +4165,7 @@ function EcoCard(p) {
 /* ---------- Store hook ---------- */
 function upsert(arr, doc) { var f = false; var out = arr.map(function (x) { if (x.id === doc.id) { f = true; return doc; } return x; }); if (!f) out.push(doc); return out; }
 function useStore(onErr) {
-  var s1 = useState({ wells: [], reservoirs: [], fields: [], timelog: [] }), data = s1[0], setData = s1[1];
+  var s1 = useState({ wells: [], reservoirs: [], fields: [], timelog: [], library: [] }), data = s1[0], setData = s1[1];
   var s2 = useState('init'), mode = s2[0], setMode = s2[1];
   var s3 = useState(true), canWrite = s3[0], setCanWrite = s3[1];
   var s4 = useState(null), assets = s4[0], setAssets = s4[1];
@@ -3793,7 +4184,7 @@ function useStore(onErr) {
       try { var u = await cl.use('user'); if (u) { var cw = await u.can('data.write'); if (cw === false) setCanWrite(false); } } catch (e) { }
       try { var a = await cl.use('assets'); if (a && alive) setAssets(a); } catch (e) { }
       dbRef.current = d;
-      ['wells', 'reservoirs', 'fields', 'timelog'].forEach(function (c) {
+      ['wells', 'reservoirs', 'fields', 'timelog', 'library'].forEach(function (c) {
         try {
           var un = d.collection(c).onSnapshot(function (snap) {
             var arr = snap.docs.map(function (x) { return Object.assign({ id: x.id }, x.data()); });
@@ -3901,11 +4292,12 @@ function App() {
           h('div', { className: 'seg' }, ['EN', 'ES'].map(function (l) { var c = l.toLowerCase(); return h('button', { key: l, type: 'button', className: 'btn', 'aria-pressed': lang === c, onClick: function () { setLang(c); } }, l); }))),
         h('span', { className: 'pill', style: { '--sc': chip[1] } }, h(Icon, { n: 'cloud', s: 13 }), chip[0]))),
     h('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-4' },
-      h(Tabs, { value: mod, onChange: setMod, tabs: [['ops', L('Operativo', 'Operations')], ['eco', L('Evaluación económica', 'Economic evaluation')], ['time', L('Tiempo del consultor', 'Consultant time')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')]] }),
+      h(Tabs, { value: mod, onChange: setMod, tabs: [['ops', L('Operativo', 'Operations')], ['eco', L('Evaluación económica', 'Economic evaluation')], ['time', L('Tiempo del consultor', 'Consultant time')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['lib', L('Biblioteca', 'Library')]] }),
       mod === 'ops' ? h(Tabs, { value: view, onChange: function (v) { setView(v); }, tabs: [['board', L('Tablero', 'Dashboard')], ['baskets', L('Cestas de trabajo', 'Work baskets'), counts.data + counts.minor + counts.major]] }) : null),
     mod === 'ops' ? (view === 'board' ? h(Tablero, { nav: nav, setNav: setNav, ctx: ctx }) : h(Cestas, { entries: entries, openWell: openWell, runExport: runExport, save: store.save }))
       : mod === 'pros' ? h(ProsTab, { runExport: runExport })
       : mod === 'fld' ? h(FieldTab, { runExport: runExport })
+      : mod === 'lib' ? h(LibTab, { lib: store.data.library, save: store.save, remove: store.remove, runExport: runExport, toast: toast, canWrite: store.canWrite, persist: store.mode === 'cloud' })
       : mod === 'time' ? h(TimeLog, { entries: store.data.timelog, save: store.save, remove: store.remove, runExport: runExport })
       : h(Econ, { wells: wells, entries: entries, fields: fields, reservoirs: store.data.reservoirs, fieldById: fieldById, runExport: runExport }),
     msg ? h('div', { className: 'toast', role: 'status' }, msg, h('button', { type: 'button', className: 'btn2', onClick: function () { setMsg(''); } }, h(Icon, { n: 'check', s: 14 }), 'OK')) : null);
