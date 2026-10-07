@@ -4319,21 +4319,16 @@ function Tablero(p) {
         h('h3', { className: 'disp', style: { fontSize: 22, fontWeight: 600 } }, L('Aún no hay pozos registrados', 'No wells registered yet')),
         h('p', { style: { color: 'var(--muted)', maxWidth: '70ch' } }, L('Entra a un campo, crea un yacimiento y agrega tu primer pozo. Cada pozo guarda su historia, producción, diagnóstico y recomendaciones, y se clasifica solo en la cesta de trabajo que le corresponde.', 'Open a field, create a reservoir and add your first well. Each well keeps its history, production, diagnosis and recommendations, and is classified automatically into its work basket.')),
         h('div', null, h('button', { type: 'button', className: 'btn2', onClick: ctx.createExample }, h(Icon, { n: 'plus', s: 14 }), L('Cargar pozo de ejemplo', 'Load example well')))) : null,
-      ['mar', 'ori'].map(function (reg) {
-        var rc = reg === 'ori' ? '#D9730D' : '#1B5FAA';
-        var fl = ctx.fields.filter(function (f) { return (f.region === 'ori' ? 'ori' : 'mar') === reg; });
-        if (!fl.length) return null;
-        return h('div', { key: 'reg-' + reg, className: 'flex flex-col gap-3' },
-          h('div', { className: 'disp', style: { background: rc, color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '.06em', padding: '8px 16px', textTransform: 'uppercase' } }, (reg === 'ori' ? L('Oriente', 'Eastern Venezuela') : L('Occidente', 'Western Venezuela')) + ' · ' + fl.length + ' ' + L('campos', 'fields')),
-          h('div', { className: 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3' }, fl.map(function (f) {
-            var ws = ctx.wells.filter(function (w) { return w.fieldId === f.id; });
-            var rs = ctx.reservoirs.filter(function (r) { return r.fieldId === f.id; });
-            return h('button', { key: f.id, type: 'button', className: 'panel p-4 card-btn', style: { borderLeft: '6px solid ' + rc }, onClick: function () { setNav({ fieldId: f.id }); } },
-              h('div', { className: 'flex items-center justify-between gap-2' }, h('span', { className: 'disp', style: { fontSize: 22, fontWeight: 600 } }, f.name), h(Icon, { n: 'chev', s: 18 })),
-              h('div', { className: 'hint', style: { marginTop: 4 } }, rs.length + ' ' + L('yacimientos', 'reservoirs') + ' · ' + ws.length + ' ' + L('pozos', 'wells')),
-              h(MiniKpis, { k: aggKPI(ws) }));
-          })));
-      }),
+      h('div', { className: 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3' }, ctx.fields.map(function (f) {
+        var ws = ctx.wells.filter(function (w) { return w.fieldId === f.id; });
+        var rs = ctx.reservoirs.filter(function (r) { return r.fieldId === f.id; });
+        var rc = f.region === 'ori' ? '#D9730D' : '#1B5FAA';
+        return h('button', { key: f.id, type: 'button', className: 'panel p-4 card-btn', style: { borderLeft: '6px solid ' + rc }, onClick: function () { setNav({ fieldId: f.id }); } },
+          h('div', { className: 'flex items-center justify-between gap-2' }, h('span', { className: 'disp', style: { fontSize: 22, fontWeight: 600 } }, f.name), h(Icon, { n: 'chev', s: 18 })),
+          h('div', { style: { marginTop: 4 } }, h('span', { style: { background: rc, color: '#fff', fontSize: 11, fontWeight: 600, letterSpacing: '.04em', padding: '2px 8px', borderRadius: 3, textTransform: 'uppercase' } }, f.region === 'ori' ? L('Oriente', 'East') : L('Occidente', 'West'))),
+          h('div', { className: 'hint', style: { marginTop: 4 } }, rs.length + ' ' + L('yacimientos', 'reservoirs') + ' · ' + ws.length + ' ' + L('pozos', 'wells')),
+          h(MiniKpis, { k: aggKPI(ws) }));
+      })),
       h('div', { className: 'panel p-4', style: window.OPT_ROLE === 'gerente' ? { display: 'none' } : undefined },
         h('div', { className: 'eyebrow mb-2' }, L('Agregar campo (por ejemplo, de Oriente)', 'Add field (for example, Eastern Venezuela)')),
         h('div', { className: 'grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto] items-end' },
@@ -4783,7 +4778,7 @@ function App() {
     store.data.fields.forEach(function (f) { db[f.id] = f; });
     DEFAULT_FIELDS.forEach(function (f) { ids[f.id] = 1; var o = db[f.id]; if (o && o.deleted) return; out.push(o ? { id: f.id, name: o.name || f.name, region: o.region || f.region } : f); });
     store.data.fields.forEach(function (f) { if (!ids[f.id] && !f.deleted) out.push({ id: f.id, name: f.name, region: f.region || 'mar' }); });
-    out.sort(function (x, y) { var rx = x.region === 'ori' ? 1 : 0, ry = y.region === 'ori' ? 1 : 0; if (rx !== ry) return rx - ry; return String(x.name || '').localeCompare(String(y.name || ''), 'es', { sensitivity: 'base', numeric: true }); });
+    out.sort(function (x, y) { return String(x.name || '').localeCompare(String(y.name || ''), 'es', { sensitivity: 'base', numeric: true }); });
     return out;
   }, [store.data.fields]);
   var fieldById = useMemo(function () { var m = {}; fields.forEach(function (f) { m[f.id] = f; }); return m; }, [fields]);
