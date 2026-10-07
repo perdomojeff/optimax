@@ -3422,7 +3422,7 @@ function libTerms(q) { var out = [], re = /"([^"]+)"|(\S+)/g, m; while ((m = re.
 function libCount(hay, term, cap) { var n = 0, i = 0; while (n < cap && (i = hay.indexOf(term, i)) >= 0) { n++; i += term.length; } return n; }
 function libExt(name) { var m = /\.([a-z0-9]+)$/i.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
 function libSize(b) { return b >= 1048576 ? nf(b / 1048576, 1) + ' MB' : nf(Math.max(1, b / 1024), 0) + ' KB'; }
-var LIB_MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+var LIB_MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
 function libTipos() { return [['estudio', L('Estudio', 'Study')], ['informe', L('Informe técnico', 'Technical report')], ['pozo', L('Informe de pozo', 'Well report')], ['mapa', L('Mapa / plano', 'Map / drawing')], ['procedimiento', L('Procedimiento', 'Procedure')], ['presentacion', L('Presentación', 'Presentation')], ['norma', L('Norma / estándar', 'Standard')], ['paper', L('Publicación / paper', 'Paper')], ['datos', L('Datos / hoja de cálculo', 'Data / spreadsheet')], ['otro', L('Otro', 'Other')]]; }
 function libTipoName(k) { var t = libTipos().filter(function (x) { return x[0] === k; })[0]; return t ? t[1] : (k || '—'); }
 
@@ -3496,6 +3496,16 @@ async function libXlsxText(buf) {
   }
   return out.join('\n');
 }
+async function libPptxText(buf) {
+  var z = libZipList(buf), dec = new TextDecoder(), out = [];
+  var names = Object.keys(z).filter(function (k) { return /^ppt\/slides\/slide\d+\.xml$/.test(k); }).sort(function (a, b) { return parseInt(a.replace(/\D+/g, ''), 10) - parseInt(b.replace(/\D+/g, ''), 10); });
+  if (!names.length) throw new Error('pptx');
+  for (var i = 0; i < names.length; i++) {
+    var xml = dec.decode(await libZipRead(buf, z[names[i]]));
+    out.push('[' + (i + 1) + ']\n' + libEnt(xml.replace(/<a:br\s*\/>/g, '\n').replace(/<\/a:p>/g, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n'));
+  }
+  return out.join('\n');
+}
 var LIB_PDF_BASES = ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/', 'https://unpkg.com/pdfjs-dist@3.11.174/build/'];
 var libPdfPromise = null;
 function libLoadPdfjs() {
@@ -3531,6 +3541,7 @@ async function libExtract(buf, ext) {
   if (ext === 'pdf') r = await libPdfText(buf);
   else if (ext === 'docx') r.text = await libDocxText(buf);
   else if (ext === 'xlsx') r.text = await libXlsxText(buf);
+  else if (ext === 'pptx') { r.text = await libPptxText(buf); }
   if (r.text.length > LIB_MAX_TEXT) r.text = r.text.slice(0, LIB_MAX_TEXT);
   return r;
 }
@@ -3670,7 +3681,7 @@ function LibTab(p) {
     var mark = function (i, st, msg) { cur = cur.map(function (x, k) { return k === i ? { name: x.name, st: st, msg: msg || '' } : x; }); setUps(cur); };
     for (var i = 0; i < files.length; i++) {
       var f = files[i], ext = libExt(f.name);
-      if (['pdf', 'docx', 'xlsx'].indexOf(ext) < 0) { mark(i, 'err', L('Formato no admitido: usa PDF, DOCX o XLSX.', 'Unsupported format: use PDF, DOCX or XLSX.')); continue; }
+      if (['pdf', 'docx', 'xlsx', 'pptx'].indexOf(ext) < 0) { mark(i, 'err', L('Formato no admitido: usa PDF, DOCX, XLSX o PPTX.', 'Unsupported format: use PDF, DOCX, XLSX or PPTX.')); continue; }
       if (f.size > LIB_MAX_BYTES) { mark(i, 'err', L('Supera el máximo de 45 MB.', 'Exceeds the 45 MB limit.')); continue; }
       if (lib.some(function (x) { return x.name === f.name && x.size === f.size; })) { mark(i, 'skip', L('Ya está en la biblioteca.', 'Already in the library.')); continue; }
       var id = uid();
@@ -3720,7 +3731,7 @@ function LibTab(p) {
   }, [prevId]);
 
   var stColor = { ok: 'var(--good)', err: 'var(--crit)', skip: 'var(--warn)', run: 'var(--info)', wait: 'var(--muted)' };
-  var fmtOpts = [['', L('Todos los formatos', 'All formats')], ['pdf', 'PDF'], ['docx', 'Word (DOCX)'], ['xlsx', 'Excel (XLSX)']];
+  var fmtOpts = [['', L('Todos los formatos', 'All formats')], ['pdf', 'PDF'], ['docx', 'Word (DOCX)'], ['xlsx', 'Excel (XLSX)'], ['pptx', 'PowerPoint (PPTX)']];
   var tipoOpts = [['', L('Todos los tipos', 'All types')]].concat(libTipos());
 
   var prevPanel = null;
@@ -3763,8 +3774,8 @@ function LibTab(p) {
         h('div', { className: 'grid gap-3 items-end', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' } },
           h(SelIn, { id: 'lib-utipo', label: L('Tipo de documento (para los archivos que subas ahora)', 'Document type (for the files you upload now)'), value: uTipo, onChange: setUTipo, options: libTipos() }),
           h('div', null, h('label', { className: 'btn2 prim', style: { cursor: 'pointer', display: 'inline-flex' } }, h(Icon, { n: 'upload', s: 14 }), L('Elegir archivos', 'Choose files'),
-            h('input', { id: 'lib-file', type: 'file', multiple: true, accept: '.pdf,.docx,.xlsx', style: { display: 'none' }, onChange: function (e) { var fl = e.target.files; doUpload(fl); try { e.target.value = ''; } catch (er) { } } })))),
-        h('div', { className: 'hint', style: { margin: 0 } }, L('También puedes arrastrar los archivos aquí. Formatos: PDF, Word (.docx) y Excel (.xlsx), hasta 45 MB cada uno. Se lee el texto de cada documento para poder buscar dentro de él.', 'You can also drag files here. Formats: PDF, Word (.docx) and Excel (.xlsx), up to 45 MB each. The text of each document is read so you can search inside it.')))
+            h('input', { id: 'lib-file', type: 'file', multiple: true, accept: '.pdf,.docx,.xlsx,.pptx', style: { display: 'none' }, onChange: function (e) { var fl = e.target.files; doUpload(fl); try { e.target.value = ''; } catch (er) { } } })))),
+        h('div', { className: 'hint', style: { margin: 0 } }, L('También puedes arrastrar los archivos aquí. Formatos: PDF, Word (.docx), Excel (.xlsx) y PowerPoint (.pptx), hasta 45 MB cada uno. Se lee el texto de cada documento para poder buscar dentro de él.', 'You can also drag files here. Formats: PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx), up to 45 MB each. The text of each document is read so you can search inside it.')))
         : h('div', { className: 'hint', style: { margin: 0 } }, L('Tu rol permite buscar, ver y descargar documentos.', 'Your role lets you search, preview and download documents.')),
       ups.length ? h('div', { className: 'flex flex-col gap-1' }, ups.map(function (u, i) { return h('div', { key: i, className: 'hint', style: { margin: 0, color: stColor[u.st] } }, (u.st === 'ok' ? '✔ ' : u.st === 'err' ? '✖ ' : u.st === 'skip' ? '• ' : '… ') + u.name + (u.msg ? ' — ' + u.msg : '')); })) : null),
     h('section', { className: 'panel p-4 flex flex-col gap-3' },
