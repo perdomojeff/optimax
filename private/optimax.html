@@ -4322,9 +4322,11 @@ function Tablero(p) {
       h('div', { className: 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3' }, ctx.fields.map(function (f) {
         var ws = ctx.wells.filter(function (w) { return w.fieldId === f.id; });
         var rs = ctx.reservoirs.filter(function (r) { return r.fieldId === f.id; });
-        return h('button', { key: f.id, type: 'button', className: 'panel p-4 card-btn', onClick: function () { setNav({ fieldId: f.id }); } },
+        var rc = f.region === 'ori' ? '#D9730D' : '#1B5FAA';
+        return h('button', { key: f.id, type: 'button', className: 'panel p-4 card-btn', style: { borderLeft: '6px solid ' + rc }, onClick: function () { setNav({ fieldId: f.id }); } },
           h('div', { className: 'flex items-center justify-between gap-2' }, h('span', { className: 'disp', style: { fontSize: 22, fontWeight: 600 } }, f.name), h(Icon, { n: 'chev', s: 18 })),
-          h('div', { className: 'hint', style: { marginTop: 2 } }, (f.region === 'ori' ? L('Oriente VZLA', 'Eastern Venezuela') : L('Occidente VZLA', 'Western Venezuela')) + ' · ' + rs.length + ' ' + L('yacimientos', 'reservoirs') + ' · ' + ws.length + ' ' + L('pozos', 'wells')),
+          h('div', { style: { marginTop: 4 } }, h('span', { style: { background: rc, color: '#fff', fontSize: 11, fontWeight: 600, letterSpacing: '.04em', padding: '2px 8px', borderRadius: 3, textTransform: 'uppercase' } }, f.region === 'ori' ? L('Oriente', 'East') : L('Occidente', 'West'))),
+          h('div', { className: 'hint', style: { marginTop: 4 } }, rs.length + ' ' + L('yacimientos', 'reservoirs') + ' · ' + ws.length + ' ' + L('pozos', 'wells')),
           h(MiniKpis, { k: aggKPI(ws) }));
       })),
       h('div', { className: 'panel p-4', style: window.OPT_ROLE === 'gerente' ? { display: 'none' } : undefined },
@@ -4776,6 +4778,7 @@ function App() {
     store.data.fields.forEach(function (f) { db[f.id] = f; });
     DEFAULT_FIELDS.forEach(function (f) { ids[f.id] = 1; var o = db[f.id]; if (o && o.deleted) return; out.push(o ? { id: f.id, name: o.name || f.name, region: o.region || f.region } : f); });
     store.data.fields.forEach(function (f) { if (!ids[f.id] && !f.deleted) out.push({ id: f.id, name: f.name, region: f.region || 'mar' }); });
+    out.sort(function (x, y) { return String(x.name || '').localeCompare(String(y.name || ''), 'es', { sensitivity: 'base', numeric: true }); });
     return out;
   }, [store.data.fields]);
   var fieldById = useMemo(function () { var m = {}; fields.forEach(function (f) { m[f.id] = f; }); return m; }, [fields]);
