@@ -4778,7 +4778,7 @@ function App() {
     store.data.fields.forEach(function (f) { db[f.id] = f; });
     DEFAULT_FIELDS.forEach(function (f) { ids[f.id] = 1; var o = db[f.id]; if (o && o.deleted) return; out.push(o ? { id: f.id, name: o.name || f.name, region: o.region || f.region } : f); });
     store.data.fields.forEach(function (f) { if (!ids[f.id] && !f.deleted) out.push({ id: f.id, name: f.name, region: f.region || 'mar' }); });
-    out.sort(function (x, y) { return String(x.name || '').localeCompare(String(y.name || ''), 'es', { sensitivity: 'base', numeric: true }); });
+    out.sort(function (x, y) { var rx = x.region === 'ori' ? 1 : 0, ry = y.region === 'ori' ? 1 : 0; if (rx !== ry) return rx - ry; return String(x.name || '').localeCompare(String(y.name || ''), 'es', { sensitivity: 'base', numeric: true }); });
     return out;
   }, [store.data.fields]);
   var fieldById = useMemo(function () { var m = {}; fields.forEach(function (f) { m[f.id] = f; }); return m; }, [fields]);
