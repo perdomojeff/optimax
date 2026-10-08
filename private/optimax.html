@@ -4063,7 +4063,7 @@ function PredTab(p) {
     var rg = reg === 'occ' ? 'Occidente' : 'Oriente';
     return Object.assign({}, S0, { tot: reg === 'occ' ? S0.occ : S0.ori, camps: S0.camps.filter(function (n) { return n.reg === rg; }), yacs: S0.yacs.filter(function (n) { return n.reg === rg; }) });
   }, [S0, reg]);
-  var regT = reg === 'all' ? regT : reg === 'occ' ? L('Occidente', 'West') : L('Oriente', 'East');
+  var regT = reg === 'all' ? L('Occidente + Oriente', 'West + East') : reg === 'occ' ? L('Occidente', 'West') : L('Oriente', 'East');
   var s3 = useState(false), busy = s3[0], setBusy = s3[1];
   var s4 = useState(12), hz = s4[0], setHz = s4[1];
   var s5 = useState('tot|'), selId = s5[0], setSelId = s5[1];
