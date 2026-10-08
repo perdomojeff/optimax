@@ -3969,23 +3969,35 @@ function predFan(S, nd) {
   for (var m = 0; m <= 120; m++) { var p = predPct(predVal(S, nd, m, 'npv'), [0.1, 0.5, 0.9]); out.push([m, p[0], p[1], p[2]]); }
   return out;
 }
+function predPaybackK(fan, k) { for (var i = 0; i < fan.length; i++) if (fan[i][k] >= 0) return fan[i][0]; return null; }
 function predPayback(fan) { for (var i = 0; i < fan.length; i++) if (fan[i][2] >= 0) return fan[i][0]; return null; }
 
 /* ---------- gráfico abanico ---------- */
 function PredFan(p) {
-  var f = p.fan, W = 760, H = 280, pl = 56, pr = 14, pt = 14, pb = 30;
-  var lo = Math.min.apply(null, f.map(function (x) { return x[1]; })), hi = Math.max.apply(null, f.map(function (x) { return x[3]; }));
-  var span = (hi - lo) || 1, y0 = lo - span * 0.05, y1 = hi + span * 0.05;
+  var f = p.fan, hz = p.hz, W = 760, H = 280, pl = 56, pr = 14, pt = 14, pb = 30;
+  var lo = Math.min(0, Math.min.apply(null, f.map(function (x) { return x[1]; }))), hi = Math.max(0, Math.max.apply(null, f.map(function (x) { return x[3]; })));
+  var span0 = (hi - lo) || 1, raw = span0 / 4, mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), nr = raw / mag, stp = (nr <= 1 ? 1 : nr <= 2 ? 2 : nr <= 2.5 ? 2.5 : nr <= 5 ? 5 : 10) * mag;
+  var y0 = Math.floor(lo / stp - 1e-9) * stp, y1 = Math.ceil(hi / stp + 1e-9) * stp, span = y1 - y0, nt = Math.round(span / stp);
   var X = function (m) { return pl + (W - pl - pr) * m / 120; }, Y = function (v) { return pt + (H - pt - pb) * (1 - (v - y0) / (y1 - y0)); };
   var band = f.map(function (x, i) { return (i ? 'L' : 'M') + X(x[0]).toFixed(1) + ' ' + Y(x[3]).toFixed(1); }).join('') + f.slice().reverse().map(function (x) { return 'L' + X(x[0]).toFixed(1) + ' ' + Y(x[1]).toFixed(1); }).join('') + 'Z';
   var line = f.map(function (x, i) { return (i ? 'L' : 'M') + X(x[0]).toFixed(1) + ' ' + Y(x[2]).toFixed(1); }).join('');
-  var ticks = [0, 1, 2, 3, 4].map(function (i) { return y0 + (y1 - y0) * i / 4; });
+  var ticks = []; for (var ti = 0; ti <= nt; ti++) ticks.push(y0 + stp * ti);
+  var tdec = stp >= 1e6 ? 0 : stp >= 1e5 ? 1 : 2;
+  var pbs = [[1, 'P90'], [2, 'P50'], [3, 'P10']].map(function (k) { return { k: k[0], m: predPaybackK(f, k[0]) }; });
   return h('svg', { viewBox: '0 0 ' + W + ' ' + H, style: { width: '100%', height: 'auto', display: 'block' }, role: 'img', 'aria-label': L('VPN acumulado P90, P50 y P10 en el tiempo', 'Cumulative NPV P90, P50 and P10 over time') },
-    ticks.map(function (t, i) { return h('g', { key: 'y' + i }, h('line', { x1: pl, x2: W - pr, y1: Y(t), y2: Y(t), stroke: 'var(--line)', strokeWidth: 1 }), h('text', { x: pl - 6, y: Y(t) + 4, textAnchor: 'end', fill: 'var(--muted)', fontSize: 11 }, (t / 1e6).toFixed(1))); }),
+    ticks.map(function (t, i) { return h('g', { key: 'y' + i }, h('line', { x1: pl, x2: W - pr, y1: Y(t), y2: Y(t), stroke: 'var(--line)', strokeWidth: 1 }), h('text', { x: pl - 6, y: Y(t) + 4, textAnchor: 'end', fill: 'var(--muted)', fontSize: 11 }, (Math.abs(t) < stp / 1000 ? '0' : (t / 1e6).toFixed(tdec)))); }),
     PRED_HZ.map(function (z) { return h('g', { key: 'x' + z[0] }, h('line', { x1: X(z[0]), x2: X(z[0]), y1: pt, y2: H - pb, stroke: 'var(--line)', strokeDasharray: '2 4' }), h('text', { x: X(z[0]), y: H - 10, textAnchor: 'middle', fill: 'var(--muted)', fontSize: 11 }, LANG === 'es' ? z[1] : z[2])); }),
-    y0 < 0 && y1 > 0 ? h('line', { x1: pl, x2: W - pr, y1: Y(0), y2: Y(0), stroke: 'var(--crit)', strokeWidth: 1.2 }) : null,
+    h('line', { x1: pl, x2: W - pr, y1: Y(0), y2: Y(0), stroke: 'var(--crit)', strokeWidth: 1.2 }),
+    h('text', { x: W - pr - 4, y: Y(0) - 5, textAnchor: 'end', fill: 'var(--crit)', fontSize: 11, fontWeight: 600 }, 'VPN = 0'),
     h('path', { d: band, fill: 'var(--accent)', opacity: 0.22 }),
     h('path', { d: line, fill: 'none', stroke: 'var(--accent)', strokeWidth: 2.2 }),
+    pbs.map(function (q) { if (q.m === null) return null; var x = X(q.m); return h('g', { key: 'pb' + q.k },
+      q.k === 2 ? h('line', { x1: x, x2: x, y1: pt, y2: Y(0), stroke: 'var(--crit)', strokeWidth: 1.2, strokeDasharray: '4 3' }) : null,
+      h('circle', { cx: x, cy: Y(0), r: q.k === 2 ? 5.5 : 4, fill: q.k === 2 ? 'var(--crit)' : 'var(--bg, #fff)', stroke: 'var(--crit)', strokeWidth: 1.8 }),
+      q.k === 2 ? h('text', { x: x + (x > W * 0.6 ? -8 : 8), y: pt + 12, textAnchor: x > W * 0.6 ? 'end' : 'start', fill: 'var(--crit)', fontSize: 11.5, fontWeight: 700 }, L('Recuperación P50: ', 'Payback P50: ') + predFmtPb(q.m)) : null); }),
+    pbs[1].m === null ? h('text', { x: W - pr - 4, y: pt + 12, textAnchor: 'end', fill: 'var(--crit)', fontSize: 11.5, fontWeight: 700 }, L('P50 no recupera en 10 años', 'P50 does not pay back in 10 yrs')) : null,
+    hz != null && f[hz] ? h('g', null, h('line', { x1: X(hz), x2: X(hz), y1: pt, y2: H - pb, stroke: 'var(--accent)', strokeWidth: 1.6 }), h('circle', { cx: X(hz), cy: Y(f[hz][2]), r: 4.5, fill: 'var(--accent)' }),
+      h('text', { x: X(hz) + (hz > 80 ? -8 : 8), y: Y(f[hz][2]) + (f[hz][2] >= 0 ? 16 : -8), textAnchor: hz > 80 ? 'end' : 'start', fill: 'var(--fg)', fontSize: 11.5, fontWeight: 700 }, 'P50 ' + (f[hz][2] / 1e6).toFixed(1) + ' MM$')) : null,
     h('text', { x: 6, y: 12, fill: 'var(--muted)', fontSize: 11 }, 'MM$'));
 }
 
@@ -4172,7 +4184,8 @@ function PredTab(p) {
       h('div', { className: 'panel p-4' },
         h('div', { className: 'flex flex-wrap items-baseline justify-between gap-2 mb-2' }, h('div', { className: 'eyebrow' }, L('VPN acumulado en el tiempo · ', 'Cumulative NPV over time · ') + (node.level === 'tot' ? regT : node.level === 'camp' ? node.name : node.campo + ' · ' + node.name)),
           h('div', { className: 'hint' }, 'TIR ' + hzLab(hzSel) + ': ' + predPctTxt(tirN.p50) + ' (P90 ' + predPctTxt(tirN.p90) + ' · P10 ' + predPctTxt(tirN.p10) + ') · ' + L('Recuperación de la inversión (P50): ', 'Payback (P50): ') + predFmtPb(predPayback(fan)) + ' · ' + L('banda = P90–P10', 'band = P90–P10'))),
-        h(PredFan, { fan: fan }),
+        h(PredFan, { fan: fan, hz: hz }),
+        h('div', { className: 'hint mt-2' }, L('Recuperación de la inversión (VPN acumulado ≥ 0) · conservador P90: ', 'Payback (cumulative NPV ≥ 0) · conservative P90: ') + predFmtPb(predPaybackK(fan, 1)) + ' · P50: ' + predFmtPb(predPaybackK(fan, 2)) + L(' · optimista P10: ', ' · optimistic P10: ') + predFmtPb(predPaybackK(fan, 3)) + L('. Línea azul vertical = horizonte elegido.', '. Vertical blue line = selected horizon.')),
         node.level !== 'tot' ? h('button', { type: 'button', className: 'btn2 mt-2', onClick: function () { setSelId('tot|'); } }, L('Ver total', 'Show total')) : null),
       h('div', { className: 'panel p-4' },
         h('div', { className: 'eyebrow mb-2' }, L('Barriles netos por año (producción neta de petróleo) · ', 'Net barrels per year (net oil production) · ') + (node.level === 'tot' ? regT : node.level === 'camp' ? node.name : node.campo + ' · ' + node.name)),
