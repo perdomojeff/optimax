@@ -4067,6 +4067,7 @@ function PredTab(p) {
   var s3 = useState(false), busy = s3[0], setBusy = s3[1];
   var s4 = useState(12), hz = s4[0], setHz = s4[1];
   var s5 = useState('tot|'), selId = s5[0], setSelId = s5[1];
+  var s11 = useState(['name', 1]), msrt = s11[0], setMsrt = s11[1];
   var s6 = useState({ c: ['name', 1], y: ['p50', -1] }), srt = s6[0], setSrt = s6[1];
   var s7 = useState(''), q = s7[0], setQ = s7[1];
   var s8 = useState(30), shown = s8[0], setShown = s8[1];
@@ -4091,8 +4092,18 @@ function PredTab(p) {
     if (!S) return [];
     var nodes = selCamp ? S.yacs.filter(function (n) { return n.campo === selCamp; }).sort(function (a, b) { return a.name.localeCompare(b.name, 'es'); }) : S.camps;
     var tot = selCamp ? S.camps.filter(function (n) { return n.name === selCamp; })[0] : S.tot;
-    return nodes.map(function (n) { return [n, predAnnual(S, n)]; }).concat([[tot, predAnnual(S, tot), true]]);
-  }, [S, selCamp]);
+    var rows = nodes.map(function (n) { return [n, predAnnual(S, n)]; }), ck = mst === 'p50' ? 'cum50' : mst === 'p90' ? 'cum90' : 'cum10';
+    var key = msrt[0], dir = msrt[1];
+    rows.sort(function (x, y) {
+      if (key === 'name') return dir * x[0].name.localeCompare(y[0].name, 'es');
+      var f = function (r) { return key === 'tot' ? r[1][9][ck] : r[1][Number(key) - 1][mst]; };
+      return dir * (f(x) - f(y));
+    });
+    return rows.concat([[tot, predAnnual(S, tot), true]]);
+  }, [S, selCamp, msrt, mst]);
+  var mth = function (k, lab) { var on = msrt[0] === k; return h('th', { key: k, role: 'button', tabIndex: 0, 'aria-sort': on ? (msrt[1] > 0 ? 'ascending' : 'descending') : 'none', style: { cursor: 'pointer', color: on ? 'var(--accent)' : undefined, userSelect: 'none' },
+    onClick: function () { setMsrt(function (o) { return [k, o[0] === k ? -o[1] : (k === 'name' ? 1 : -1)]; }); },
+    onKeyDown: function (e) { if (e.key === 'Enter') e.target.click(); } }, lab + (on ? (msrt[1] > 0 ? ' ▲' : ' ▼') : ' ↕')); };
   var cstat = useMemo(function () { return S ? S.camps.map(function (n) { return [n, predStat(S, n, hz)]; }) : []; }, [S, hz]);
   var ystat = useMemo(function () { return S ? S.yacs.map(function (n) { return [n, predStat(S, n, hz)]; }) : []; }, [S, hz]);
   var cmpF = function (t) { var k = srt[t][0], d = srt[t][1]; return function (a, b) {
@@ -4197,11 +4208,11 @@ function PredTab(p) {
         h('div', { className: 'flex flex-wrap items-center justify-between gap-2 mb-2' }, h('div', { className: 'eyebrow' }, selCamp ? L('Barriles netos por año por yacimiento · ', 'Net barrels per year by reservoir · ') + selCamp : L('Barriles netos por año por campo', 'Net barrels per year by field')),
           h(Seg, { value: mst, options: [['p90', 'P90'], ['p50', 'P50'], ['p10', 'P10']], onChange: setMst })),
         h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' },
-          h('thead', null, h('tr', null, h('th', null, selCamp ? L('Yacimiento', 'Reservoir') : L('Campo', 'Field')), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (y) { return h('th', { key: y }, L('Año ', 'Yr ') + y); }), h('th', null, L('Total 10 años', '10-yr total')))),
+          h('thead', null, h('tr', null, mth('name', selCamp ? L('Yacimiento', 'Reservoir') : L('Campo', 'Field')), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (y) { return mth(String(y), L('Año ', 'Yr ') + y); }), mth('tot', L('Total 10 años', '10-yr total')))),
           h('tbody', null, matRows.map(function (rw) { var n = rw[0], an = rw[1], isT = rw[2], cumK = mst === 'p50' ? 'cum50' : mst === 'p90' ? 'cum90' : 'cum10';
             return h('tr', { key: (isT ? 'T' : '') + n.campo + n.name, onClick: isT ? undefined : function () { sel(n, selCamp ? 'y' : 'c'); }, style: { cursor: isT ? 'default' : 'pointer', background: isT ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : undefined, fontWeight: isT ? 600 : undefined } },
               h('td', null, isT ? (selCamp ? L('Total ', 'Total ') + n.name : 'TOTAL') : n.name), an.map(function (a) { return h('td', { key: a.y, className: 'mono' }, nf(a[mst] / 1e3)); }), h('td', { className: 'mono', style: { fontWeight: 600 } }, nf(an[9][cumK] / 1e3))); })))),
-        h('div', { className: 'hint' }, L('Mbbl de petróleo neto por año, antes de regalía. Selecciona un campo en los filtros de arriba para ver sus yacimientos. Los percentiles de cada celda se calculan por separado, por eso los P90 y P10 no suman exactamente al total.', 'Mbbl of net oil per year, before royalty. Pick a field in the filters above to see its reservoirs. Each cell\'s percentiles are computed separately, so P90 and P10 do not add up exactly to the total.'))),
+        h('div', { className: 'hint' }, L('Mbbl de petróleo neto por año, antes de regalía. Selecciona un campo en los filtros de arriba para ver sus yacimientos. Haz clic en un encabezado para ordenar (la fila Total queda siempre al final). Los percentiles de cada celda se calculan por separado, por eso los P90 y P10 no suman exactamente al total.', 'Mbbl of net oil per year, before royalty. Pick a field in the filters above to see its reservoirs. Click a header to sort (the Total row always stays last). Each cell\'s percentiles are computed separately, so P90 and P10 do not add up exactly to the total.'))),
       h('div', { className: 'panel p-4' },
         h('div', { className: 'eyebrow mb-2' }, L('Por campo · ', 'By field · ') + hzLab(hzSel) + ' · MM$'),
         h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' }, head('c'), h('tbody', null, crows.map(function (x) { return row(x[0], x[1], 'c', selId === 'c|' + x[0].name); }))))),
