@@ -3947,7 +3947,7 @@ function predSim(P) {
   var regOf = {}; yn.forEach(function (n) { regOf[n.campo] = n.reg; });
   camps.sort(function (a, b) { var ra = order.indexOf(regOf[a]), rb = order.indexOf(regOf[b]); return ra === rb ? a.localeCompare(b) : ra - rb; });
   var cn = camps.map(function (cname) {
-    var kids = yn.filter(function (n) { return n.campo === cname; }), parts = []; add(parts, kids[0].parts[0].c, kids);
+    var kids = yn.filter(function (n) { return n.campo === cname; }), parts = [], byc = {}; kids.forEach(function (n) { (byc[n.parts[0].c] = byc[n.parts[0].c] || []).push(n); }); Object.keys(byc).forEach(function (c) { add(parts, Number(c), byc[c]); });
     return mk('camp', cname, cname, kids[0].reg, parts, kids.reduce(function (a, n) { return a + n.nW; }, 0), null);
   });
   var KC = E.cls.length, tp = []; for (var c0 = 0; c0 < KC; c0++) (function (c) { var ks = yn.filter(function (n) { return n.parts[0].c === c; }); if (ks.length) add(tp, c, ks); })(c0);
@@ -3959,6 +3959,11 @@ function predSim(P) {
   var cl = mac ? PRED_CLS.map(function (nm, c) { var ks = yn.filter(function (n) { return n.parts[0].c === c; }), pts = tp.filter(function (x) { return x.c === c; }), nU = sel.units.filter(function (u) { return u.cls === c; }).length; return { c: c, name: nm, reg: PRED_CLSDIV[c], nU: nU, nY: ks.length, node: mk('tot', nm.toUpperCase(), '', PRED_CLSDIV[c], pts, nU, null) }; }) : [];
   var occ = divs[0].node, ori = divs[1].node;
   return { N: N, M1: M1, cv: cv, sel: sel, tot: tot, occ: occ, ori: ori, divs: divs, cl: cl, camps: cn, yacs: yn, P: P };
+}
+function predSumNodes(S, nodes, name, reg, onlyC) {
+  var N = S.N, by = {}, nW = 0;
+  nodes.forEach(function (nd) { nW += nd.nW; nd.parts.forEach(function (pt) { if (onlyC !== undefined && pt.c !== onlyC) return; var b = by[pt.c] = by[pt.c] || { c: pt.c, Q: new Float32Array(N), n: new Float32Array(N), k: new Float32Array(N) }; for (var r = 0; r < N; r++) { b.Q[r] += pt.Q[r]; b.n[r] += pt.n[r]; b.k[r] += pt.k[r]; } }); });
+  return { level: 'tot', name: name, campo: '', reg: reg || '', parts: Object.keys(by).map(function (k) { return by[k]; }), nW: nW, score: null };
 }
 function predVal(S, nd, m, what) {
   var N = S.N, M1 = S.M1, o = new Float64Array(N);
@@ -4082,7 +4087,7 @@ async function predExport(S, rowsFor) {
   [18, 7, 12, 12, 12, 18, 18].forEach(function (w, i) { wa.getColumn(i + 1).width = w; });
   var wp = wb.addWorksheet(L('Pozos', 'Wells')); var ivn = P.mode === 'mac' ? predIvNamesMac() : predIvNamesPrim();
   wp.addRow([L('Campo', 'Field'), L('Yacimiento', 'Reservoir'), L('Pozo', 'Well'), L('Puntaje', 'Score'), L('Confianza', 'Confidence'), L('Intervención', 'Intervention'), 'Qi (bopd)', L('Prob. éxito', 'Success prob.'), 'CAPEX (k$)']); styleHeader(wp.getRow(1));
-  S.sel.units.forEach(function (u) { var y = S.sel.yacs[u.k]; wp.addRow([y.campo, y.name, u.name, u.score, PRED.conf[u.conf], LANG === 'es' ? ivn[u.iv] : (PRED_IVEN[ivn[u.iv]] || ivn[u.iv]), u.qi, +Math.min(0.98, P.iv[u.iv].p * P.cm[u.conf]).toFixed(2), P.iv[u.iv].capex]); });
+  var okY = {}; S.yacs.forEach(function (n) { okY[n.campo + '/' + n.name] = 1; }); S.sel.units.forEach(function (u) { var y = S.sel.yacs[u.k]; if (!okY[y.campo + '/' + y.name]) return; wp.addRow([y.campo, y.name, u.name, u.score, PRED.conf[u.conf], LANG === 'es' ? ivn[u.iv] : (PRED_IVEN[ivn[u.iv]] || ivn[u.iv]), u.qi, +Math.min(0.98, P.iv[u.iv].p * P.cm[u.conf]).toFixed(2), P.iv[u.iv].capex]); });
   [16, 22, 18, 9, 11, 40, 9, 11, 11].forEach(function (w, i) { wp.getColumn(i + 1).width = w; });
   var wq = wb.addWorksheet(L('Parámetros', 'Parameters')), E = P.econ, rows = [
     [L('Escenario predictivo · Monte Carlo (antes de ISLR)', 'Predictive scenario · Monte Carlo (pre-income-tax)')], [L('Fecha', 'Date'), PRED.asof], [L('Corridas / semilla', 'Runs / seed'), S.N + ' / ' + P.sim.seed], [],
@@ -4110,12 +4115,22 @@ function PredView(p) {
   var s1 = useState(dfl), P = s1[0], setP = s1[1];
   var s2 = useState(null), S0 = s2[0], setS = s2[1];
   var s20 = useState('all'), reg = s20[0], setReg = s20[1];
+  var s21 = useState([]), cust = s21[0], setCust = s21[1];
+  var s22 = useState(''), cq = s22[0], setCq = s22[1];
   var S = useMemo(function () {
     if (!S0) return null; if (reg === 'all') return S0;
+    if (reg === 'custom') {
+      if (!cust.length) return S0;
+      var cs = {}; cust.forEach(function (c) { cs[c] = 1; });
+      var cm = S0.camps.filter(function (n) { return cs[n.name]; }), ys = S0.yacs.filter(function (n) { return cs[n.campo]; });
+      var dvs = S0.divs.map(function (d) { var ks = cm.filter(function (n) { return n.reg === d.reg; }); return { key: d.key, reg: d.reg, nU: ks.reduce(function (a, n) { return a + n.nW; }, 0), nY: ys.filter(function (n) { return n.reg === d.reg; }).length, node: predSumNodes(S0, ks, d.reg.toUpperCase(), d.reg) }; });
+      var cls = S0.cl.map(function (c) { var ks = cm.filter(function (n) { return n.reg === c.reg; }), nd = predSumNodes(S0, ks, c.name.toUpperCase(), c.reg, c.c); return { c: c.c, name: c.name, reg: c.reg, nU: ys.filter(function (n) { return n.parts[0].c === c.c; }).reduce(function (a, n) { return a + n.nW; }, 0), nY: ys.filter(function (n) { return n.parts[0].c === c.c; }).length, node: nd }; });
+      return Object.assign({}, S0, { tot: predSumNodes(S0, cm, 'SELECCIÓN', ''), camps: cm, yacs: ys, divs: dvs, cl: cls });
+    }
     var dv = S0.divs.filter(function (d) { return d.key === reg; })[0]; if (!dv) return S0; var rg = dv.reg;
     return Object.assign({}, S0, { tot: dv.node, camps: S0.camps.filter(function (n) { return n.reg === rg; }), yacs: S0.yacs.filter(function (n) { return n.reg === rg; }) });
-  }, [S0, reg]);
-  var regT = reg === 'all' ? (mac ? L('Toda Venezuela', 'All Venezuela') : L('Occidente + Oriente', 'West + East')) : mac ? (LANG === 'es' ? reg : PRED_DIVEN[reg]) : reg === 'occ' ? L('Occidente', 'West') : L('Oriente', 'East');
+  }, [S0, reg, cust]);
+  var regT = reg === 'custom' ? L('Selección personalizada (' + cust.length + (cust.length === 1 ? ' campo)' : ' campos)'), 'Custom selection (' + cust.length + (cust.length === 1 ? ' field)' : ' fields)')) : reg === 'all' ? (mac ? L('Toda Venezuela', 'All Venezuela') : L('Occidente + Oriente', 'West + East')) : mac ? (LANG === 'es' ? reg : PRED_DIVEN[reg]) : reg === 'occ' ? L('Occidente', 'West') : L('Oriente', 'East');
   var s3 = useState(false), busy = s3[0], setBusy = s3[1];
   var s4 = useState(12), hz = s4[0], setHz = s4[1];
   var s5 = useState('tot|'), selId = s5[0], setSelId = s5[1];
@@ -4166,6 +4181,7 @@ function PredView(p) {
     return r * d; }; };
   var yrows = ystat.filter(function (x) { return !q || (x[0].name + ' ' + x[0].campo).toLowerCase().indexOf(q.toLowerCase()) >= 0; }).sort(cmpF('y'));
   var crows = cstat.slice().sort(cmpF('c'));
+  var Sd = reg === 'custom' && S ? S : S0;
   var hzLab = function (z) { return LANG === 'es' ? z[1] : z[2]; };
   var hzSel = PRED_HZ.filter(function (z) { return z[0] === hz; })[0];
   var ts = tstat ? tstat[PRED_HZ.map(function (z) { return z[0]; }).indexOf(hz)] : null;
@@ -4183,7 +4199,7 @@ function PredView(p) {
       h('td', { className: 'mono' }, nf(st.prob * 100) + '%'), h('td', { className: 'mono' }, nf(st.np50 / 1e3)), h('td', { className: 'mono' }, nf(st.eff, 2)));
   };
   var head = function (t) { return h('thead', null, h('tr', null, t === 'y' ? th('y', 'campo', L('Campo', 'Field')) : null, th(t, 'name', t === 'y' ? L('Yacimiento', 'Reservoir') : L('Campo', 'Field')), th(t, 'nW', L('Pozos', 'Wells')), th(t, 'capex', L('Inversión', 'Invest.') + ' MM$'), th(t, 'p90', 'VPN P90'), th(t, 'p50', 'VPN P50'), th(t, 'p10', 'VPN P10'), th(t, 'prob', 'P(VPN>0)'), th(t, 'np', 'Np P50 Mbbl'), th(t, 'eff', 'VPN/I'))); };
-  var doX = function () { p.runExport(function () { return predExport(S0); }, L('Excel listo para descargar.', 'Excel ready to download.')); };
+  var doX = function () { p.runExport(function () { return predExport(S); }, L('Excel listo para descargar.', 'Excel ready to download.')); };
 
   return h('div', { className: 'flex flex-col gap-4' },
     h('div', { className: 'panel p-4' },
@@ -4228,11 +4244,29 @@ function PredView(p) {
       dirty ? h('div', { className: 'banner-warn p-3' }, L('Los parámetros cambiaron: pulsa Simular para actualizar los resultados.', 'Parameters changed: press Simulate to refresh the results.')) : null,
       h('div', { className: 'flex flex-wrap items-center gap-3', role: 'group', 'aria-label': L('Región', 'Region') },
         h('span', { className: 'lbl', style: { margin: 0 } }, L('Región', 'Region')),
-        (mac ? [['all', L('Todas', 'All'), '#5b6b73']].concat(PRED_DIV.concat(['Costa Afuera', 'Centro Sur']).map(function (d) { return [d, LANG === 'es' ? d : PRED_DIVEN[d], PRED_DIVCOL[d]]; })) : [['all', L('Todas', 'All'), '#5b6b73'], ['occ', L('Occidente', 'West'), '#1B5FAA'], ['ori', L('Oriente', 'East'), '#D9730D']]).map(function (r) {
-          var on = reg === r[0], dv = S0.divs.filter(function (d) { return d.key === r[0]; })[0], dis = r[0] === 'Centro Sur' || (r[0] !== 'all' && r[0] !== 'Costa Afuera' && (!dv || dv.nU === 0));
+        (mac ? [['all', L('Todas', 'All'), '#5b6b73']].concat(PRED_DIV.concat(['Costa Afuera', 'Centro Sur']).map(function (d) { return [d, LANG === 'es' ? d : PRED_DIVEN[d], PRED_DIVCOL[d]]; })).concat([['custom', L('Personalizada', 'Custom') + (cust.length ? ' · ' + cust.length : ''), '#6B3FA0']]) : [['all', L('Todas', 'All'), '#5b6b73'], ['occ', L('Occidente', 'West'), '#1B5FAA'], ['ori', L('Oriente', 'East'), '#D9730D']]).map(function (r) {
+          var on = reg === r[0], dv = S0.divs.filter(function (d) { return d.key === r[0]; })[0], dis = r[0] === 'Centro Sur' || (r[0] !== 'all' && r[0] !== 'Costa Afuera' && r[0] !== 'custom' && (!dv || dv.nU === 0));
           return h('button', { key: r[0], type: 'button', disabled: dis, 'aria-pressed': on, title: dis && mac ? L('Sin información cargada o sin yacimientos que cumplan la selección', 'No data loaded or no reservoirs meeting the selection') : r[0] === 'Costa Afuera' ? L('Solo reservas y premisas requeridas; sin VPN', 'Reserves and required premises only; no NPV') : undefined, onClick: function () { setReg(r[0]); setSelId('tot|'); setShown(30); }, className: 'disp',
             style: { background: on ? r[2] : 'transparent', color: on ? '#fff' : r[2], border: '2px solid ' + r[2], padding: mac ? '8px 16px' : '8px 22px', fontSize: mac ? 15 : 17, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', borderRadius: 6, cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.4 : 1 } }, r[1] + (dv && mac && r[0] !== 'all' ? ' · ' + nf(dv.nY) : ''));
         })),
+      mac && reg === 'custom' ? h('div', { className: 'panel p-4 flex flex-col gap-3', style: { borderLeft: '4px solid #6B3FA0' } },
+        h('div', { className: 'flex flex-wrap items-baseline justify-between gap-2' }, h('div', { className: 'eyebrow' }, L('Selección personalizada de campos', 'Custom field selection')),
+          h('div', { className: 'flex gap-2 items-center' }, h('input', { className: 'in', style: { maxWidth: 220 }, placeholder: L('Buscar campo', 'Search field'), value: cq, onChange: function (e) { setCq(e.target.value); } }),
+            h('button', { type: 'button', className: 'btn2', disabled: !cust.length, onClick: function () { setCust([]); setSelId('tot|'); } }, L('Limpiar todo', 'Clear all')))),
+        h('div', { className: 'hint' }, cust.length ? L('Resultados de abajo: solo los ', 'Results below: only the ') + cust.length + L(' campos marcados', ' ticked fields') + ' (' + PRED_DIV.map(function (d) { var k = cust.filter(function (c) { var cp = S0.camps.filter(function (n) { return n.name === c; })[0]; return cp && cp.reg === d; }).length; return k ? (LANG === 'es' ? d : PRED_DIVEN[d]) + ' ' + k : null; }).filter(Boolean).join(' · ') + '). ' + L('Cada campo se evalúa con los parámetros de su perfil; el total no es la suma exacta de los percentiles.', 'Each field uses its own profile parameters; the total is not the exact sum of percentiles.') : L('Marca los campos que quieres ver, de cualquier División. Todo lo de abajo (indicadores, tablas y gráficos) se recalcula solo con esos campos.', 'Tick the fields you want to see, from any Division. Everything below (indicators, tables and charts) is recalculated for those fields only.')),
+        cust.length ? h('div', { className: 'flex flex-wrap gap-2' }, cust.map(function (c) { var cp = S0.camps.filter(function (n) { return n.name === c; })[0], col = cp ? PRED_DIVCOL[cp.reg] : '#6B3FA0';
+          return h('button', { key: c, type: 'button', title: L('Quitar', 'Remove'), onClick: function () { setCust(cust.filter(function (x) { return x !== c; })); setSelId('tot|'); }, style: { border: '1.5px solid ' + col, color: col, background: 'transparent', borderRadius: 999, padding: '2px 10px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } }, c + ' ✕'); })) : null,
+        h('div', { className: 'grid gap-3 grid-cols-1 md:grid-cols-3' }, PRED_DIV.map(function (d) {
+          var all = S0.camps.filter(function (n) { return n.reg === d; }), vis = all.filter(function (n) { return !cq || n.name.toLowerCase().indexOf(cq.toLowerCase()) >= 0; }), on = all.filter(function (n) { return cust.indexOf(n.name) >= 0; }).length, col = PRED_DIVCOL[d];
+          return h('div', { key: d, style: { border: '1px solid var(--line)', borderTop: '3px solid ' + col, borderRadius: 6, padding: 10, minWidth: 0 } },
+            h('div', { className: 'flex items-center justify-between gap-2 mb-2' }, h('b', { style: { color: col } }, (LANG === 'es' ? d : PRED_DIVEN[d]) + ' · ' + on + '/' + all.length),
+              h('span', { className: 'flex gap-2' }, h('button', { type: 'button', className: 'lnk', onClick: function () { var add = vis.map(function (n) { return n.name; }).filter(function (c) { return cust.indexOf(c) < 0; }); setCust(cust.concat(add)); setSelId('tot|'); } }, L('Todos', 'All')), h('button', { type: 'button', className: 'lnk', onClick: function () { var rm = {}; all.forEach(function (n) { rm[n.name] = 1; }); setCust(cust.filter(function (c) { return !rm[c]; })); setSelId('tot|'); } }, L('Ninguno', 'None')))),
+            h('div', { style: { maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 } }, vis.length ? vis.map(function (n) { var ck = cust.indexOf(n.name) >= 0;
+              return h('label', { key: n.name, style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', padding: '2px 4px', borderRadius: 4, background: ck ? 'color-mix(in srgb, ' + col + ' 14%, transparent)' : undefined } },
+                h('input', { type: 'checkbox', checked: ck, style: { accentColor: col }, onChange: function () { setCust(ck ? cust.filter(function (x) { return x !== n.name; }) : cust.concat([n.name])); setSelId('tot|'); setShown(30); } }),
+                h('span', { style: { flex: 1, minWidth: 0 } }, n.name), h('span', { className: 'mono hint' }, n.nW)); }) : h('div', { className: 'hint' }, L('Sin coincidencias', 'No matches'))));
+        })),
+        h('div', { className: 'hint' }, L('El número a la derecha de cada campo son los pozos que el modelo le asigna. Costa Afuera no se incluye (sin VPN).', 'The number on the right of each field is the wells the model assigns to it. Offshore is not included (no NPV).'))) : null,
       mac && reg === 'Costa Afuera' ? h('div', { className: 'panel p-4 flex flex-col gap-3' },
         h('div', { className: 'eyebrow' }, L('Costa Afuera · reservas y premisas requeridas (sin VPN)', 'Offshore · reserves and required premises (no NPV)')),
         h('div', { className: 'hint', style: { fontSize: 13 } }, L('Los yacimientos de Costa Afuera son principalmente de gas no asociado y gas condensado, y los proyectos del área apuntan a gas natural (por ejemplo, pozos del proyecto Cardón IV – campo Perla con 60 a 150 MMpcd). Un modelo en bopd no aplica, por eso esta División queda fuera del cálculo de VPN y del total. No es prioridad; se deja documentado qué se necesita para analizarla a futuro.', 'Offshore reservoirs are mainly non-associated gas and gas condensate, and projects in the area target natural gas (e.g., Cardón IV – Perla field wells at 60 to 150 MMscfd). A bopd model does not apply, so this Division is left out of the NPV and the total. It is not a priority; what is needed to analyze it later is documented here.')),
@@ -4247,7 +4281,7 @@ function PredView(p) {
            L('Capex por pozo y de facilidades costa afuera (plataforma, líneas submarinas, planta) y Opex fijo y variable.', 'Capex per well and for offshore facilities (platform, subsea lines, plant) and fixed and variable Opex.'),
            L('Declinación del gas por pozo (Di, b), regalía y régimen fiscal aplicable al gas, y tasa de éxito.', 'Per-well gas decline (Di, b), royalty and fiscal regime for gas, and success rate.'),
            L('Mercado y capacidad de evacuación: demanda interna, gasoductos y planta disponibles; sin ellos la tasa de pozo no es la tasa vendible.', 'Market and takeaway capacity: domestic demand, available pipelines and plant; without them the well rate is not the saleable rate.')].map(function (t, i) { return h('li', { key: i }, t); }))) : null,
-      h('div', { className: 'flex flex-col gap-4', style: { display: mac && reg === 'Costa Afuera' ? 'none' : undefined } },
+      h('div', { className: 'flex flex-col gap-4', style: { display: mac && (reg === 'Costa Afuera' || (reg === 'custom' && !cust.length)) ? 'none' : undefined } },
       h('div', { className: 'flex flex-wrap items-center gap-3' }, h('span', { className: 'lbl', style: { margin: 0 } }, L('Horizonte', 'Horizon')), h(Seg, { value: String(hz), options: PRED_HZ.map(function (z) { return [String(z[0]), hzLab(z)]; }), onChange: function (v) { setHz(Number(v)); } }),
         h('button', { type: 'button', className: 'btn2', style: { marginLeft: 'auto' }, onClick: doX }, h(Icon, { n: 'download', s: 14 }), L('Exportar Excel', 'Export Excel'))),
       h('div', { className: 'grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-7' },
@@ -4293,10 +4327,10 @@ function PredView(p) {
       mac ? h('div', { className: 'panel p-4' },
         h('div', { className: 'eyebrow mb-2' }, L('Por División · ', 'By Division · ') + hzLab(hzSel) + ' · MM$'),
         h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' }, h('thead', null, h('tr', null, h('th', null, L('División', 'Division')), h('th', null, L('Campos', 'Fields')), h('th', null, L('Yacimientos', 'Reservoirs')), h('th', null, L('Pozos', 'Wells')), h('th', null, L('Inversión', 'Invest.') + ' MM$'), h('th', null, 'VPN P90'), h('th', null, 'VPN P50'), h('th', null, 'VPN P10'), h('th', null, 'P(VPN>0)'), h('th', null, 'Np P50 Mbbl'), h('th', null, 'VPN/I'))),
-          h('tbody', null, S0.divs.filter(function (d) { return d.nU > 0; }).map(function (d) {
-            var rowsD = [{ key: d.key, reg: d.reg, nU: d.nU, nY: d.nY, node: d.node, sub: false, nC: S0.camps.filter(function (c) { return c.reg === d.reg; }).length }];
-            S0.cl.filter(function (c) { return c.reg === d.reg && c.nU > 0; }).length > 1 && S0.cl.filter(function (c) { return c.reg === d.reg && c.nU > 0; }).forEach(function (c) { rowsD.push({ key: d.key, reg: c.name, nU: c.nU, nY: c.nY, node: c.node, sub: true, nC: null }); });
-            return rowsD.map(function (r) { var st = predStat(S0, r.node, hz), on = reg === r.key && !r.sub;
+          h('tbody', null, Sd.divs.filter(function (d) { return d.nU > 0; }).map(function (d) {
+            var rowsD = [{ key: d.key, reg: d.reg, nU: d.nU, nY: d.nY, node: d.node, sub: false, nC: Sd.camps.filter(function (c) { return c.reg === d.reg; }).length }];
+            Sd.cl.filter(function (c) { return c.reg === d.reg && c.nU > 0; }).length > 1 && Sd.cl.filter(function (c) { return c.reg === d.reg && c.nU > 0; }).forEach(function (c) { rowsD.push({ key: d.key, reg: c.name, nU: c.nU, nY: c.nY, node: c.node, sub: true, nC: null }); });
+            return rowsD.map(function (r) { var st = predStat(Sd, r.node, hz), on = reg === r.key && !r.sub;
               return h('tr', { key: r.key + r.reg, onClick: function () { setReg(r.key); setSelId('tot|'); setShown(30); }, style: { cursor: 'pointer', background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined } },
                 h('td', { style: { paddingLeft: r.sub ? 22 : undefined } }, r.sub ? h('span', { style: { color: 'var(--muted)' } }, '↳ ' + r.reg) : h('b', { style: { color: PRED_DIVCOL[d.key] } }, LANG === 'es' ? r.reg : PRED_DIVEN[r.reg])), h('td', { className: 'mono' }, r.nC === null ? '' : nf(r.nC)), h('td', { className: 'mono' }, nf(r.nY)), h('td', { className: 'mono' }, nf(r.nU)), h('td', { className: 'mono' }, predMM(st.capex)),
                 h('td', { className: 'mono' }, predMM(st.p90)), h('td', { className: 'mono', style: { color: st.p50 >= 0 ? 'var(--good)' : 'var(--crit)', fontWeight: 600 } }, predMM(st.p50)), h('td', { className: 'mono' }, predMM(st.p10)), h('td', { className: 'mono' }, nf(st.prob * 100) + '%'), h('td', { className: 'mono' }, nf(st.np50 / 1e3)), h('td', { className: 'mono' }, nf(st.eff, 2))); }); })))),
