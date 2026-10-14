@@ -12,5 +12,5 @@ module.exports = async (req, res) => {
   if (!rows.length || !rows[0].activo) return res.status(403).send('pendiente de aprobacion');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'private, no-store');
-  res.status(200).send(fs.readFileSync(path.join(process.cwd(), 'private', 'optimax.html'), 'utf8'));
+  res.status(200).send(fs.readFileSync(path.join(process.cwd(), 'private', 'strataflow.html'), 'utf8'));
 };
