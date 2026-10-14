@@ -5332,7 +5332,7 @@ function useStore(onErr) {
 function App() {
   var s1 = useState('es'), lang = s1[0], setLang = s1[1];
   LANG = lang;
-  var s2 = useState('ops'), mod = s2[0], setMod = s2[1];
+  var s2 = useState('pred'), mod = s2[0], setMod = s2[1];
   var s3 = useState('board'), view = s3[0], setView = s3[1];
   var s4 = useState({}), nav = s4[0], setNav = s4[1];
   var s5 = useState(''), msg = s5[0], setMsg = s5[1];
@@ -5401,7 +5401,7 @@ function App() {
           h('div', { className: 'seg' }, ['EN', 'ES'].map(function (l) { var c = l.toLowerCase(); return h('button', { key: l, type: 'button', className: 'btn', 'aria-pressed': lang === c, onClick: function () { setLang(c); } }, l); }))),
         h('span', { className: 'pill', style: { '--sc': chip[1] } }, h(Icon, { n: 'cloud', s: 13 }), chip[0]))),
     h('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-4' },
-      h(Tabs, { value: mod, onChange: setMod, tabs: [['ops', L('Operativo', 'Operations')], ['eco', L('Evaluación económica', 'Economic evaluation')], ['time', L('Tiempo del consultor', 'Consultant time')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['lib', L('Biblioteca', 'Library')], ['pred', L('Predictivo', 'Predictive')]] }),
+      h(Tabs, { value: mod, onChange: setMod, tabs: [['pred', L('Predictivo', 'Predictive')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['time', L('Tiempo del consultor', 'Consultant time')], ['lib', L('Biblioteca', 'Library')]] }),
       mod === 'ops' ? h(Tabs, { value: view, onChange: function (v) { setView(v); }, tabs: [['board', L('Tablero', 'Dashboard')], ['baskets', L('Cestas de trabajo', 'Work baskets'), counts.data + counts.minor + counts.major]] }) : null),
     mod === 'ops' ? (view === 'board' ? h(Tablero, { nav: nav, setNav: setNav, ctx: ctx }) : h(Cestas, { entries: entries, openWell: openWell, runExport: runExport, save: store.save }))
       : mod === 'pros' ? h(ProsTab, { runExport: runExport })
