@@ -4380,6 +4380,86 @@ var BANNER_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 560 17
 var LIFTS = function () { return [['GL', 'Gas Lift'], ['ESP', L('BES / ESP', 'ESP')], ['PCP', L('BCP / PCP', 'PCP')], ['SRP', L('Bombeo mecánico', 'Beam pumping')], ['FL', L('Flujo natural', 'Natural flow')]]; };
 var CAT_COLOR = { 0: 'var(--muted)', 1: 'var(--info)', 2: 'var(--accent)', 3: 'var(--c3)' };
 
+/* Project Manager: horas semanales de aliados de SAI Group. Los aliados solo registran (vista aparte, pm.html); aquí administrador y gerente ven, editan y eliminan. */
+function PMTab(p) {
+  var s1 = useState([]), rows = s1[0], setRows = s1[1];
+  var s2 = useState('all'), who = s2[0], setWho = s2[1];
+  var s3 = useState(''), from = s3[0], setFrom = s3[1];
+  var s4 = useState(''), to = s4[0], setTo = s4[1];
+  var s5 = useState(null), ed = s5[0], setEd = s5[1];
+  var s6 = useState(''), err = s6[0], setErr = s6[1];
+  var MEM = window.OPT_MEMBERS || [];
+  useEffect(function () {
+    var alive = true, off = null;
+    (async function () {
+      var db = window.claude && window.claude.use ? await window.claude.use('db') : null; if (!db || !alive) return;
+      off = db.collection('pm_horas').onSnapshot(function (snap) { if (alive) setRows(snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); })); }, function (e) { if (alive) setErr(e && e.message || 'error'); });
+    })();
+    return function () { alive = false; if (off) off(); };
+  }, []);
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var isoD = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var monday = function (x) { var d = new Date(x + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return isoD(d); };
+  var nameOf = function (r) { var m = MEM.filter(function (x) { return x.user_id === r.owner; })[0]; return m ? (m.disp || m.nombre || m.email) : (r.ownerName || r.owner); };
+  var owners = []; rows.forEach(function (r) { if (owners.indexOf(r.owner) < 0) owners.push(r.owner); });
+  var list = rows.filter(function (r) { return (who === 'all' || r.owner === who) && (!from || r.date >= from) && (!to || r.date <= to); })
+    .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  var total = list.reduce(function (t, r) { return t + (+r.horas || 0); }, 0);
+  var sum = {}; list.forEach(function (r) { var k = r.owner + '|' + r.week; sum[k] = sum[k] || { owner: r.owner, week: r.week, h: 0 }; sum[k].h += +r.horas || 0; });
+  var sumL = Object.keys(sum).map(function (k) { return sum[k]; }).sort(function (a, b) { return a.week < b.week ? 1 : a.week > b.week ? -1 : 0; });
+  var coll = async function () { var db = await window.claude.use('db'); return db.collection('pm_horas'); };
+  var save = async function () {
+    setErr(''); var h = parseFloat(String(ed.horas).replace(',', '.'));
+    if (!ed.date || !ed.project.trim() || !ed.activity.trim() || !(h >= 0.25 && h <= 24)) { setErr(L('Revisa fecha, proyecto, actividad y horas (0,25 a 24).', 'Check date, project, activity and hours (0.25 to 24).')); return; }
+    try {
+      var c = await coll();
+      await c.doc(ed.id).set({ owner: ed.owner, ownerName: ed.ownerName, date: ed.date, week: monday(ed.date), project: ed.project.trim(), activity: ed.activity.trim(), horas: h, note: (ed.note || '').trim(), created: ed.created, editedBy: (window.OPT_USER || {}).id, edited: new Date().toISOString() });
+      setEd(null);
+    } catch (e) { setErr(e && e.message || 'error'); }
+  };
+  var del = async function (r) { setErr(''); try { var c = await coll(); await c.doc(r.id).delete(); if (ed && ed.id === r.id) setEd(null); } catch (e) { setErr(e && e.message || 'error'); } };
+  var doCsv = function () {
+    return p.runExport(function () {
+      var mo = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'], n = new Date();
+      var head = ['Persona', 'Fecha', 'Semana (lunes)', 'Proyecto', 'Actividad', 'Horas', 'Notas'];
+      var out = [head].concat(list.map(function (r) { return [nameOf(r), r.date, r.week, r.project, r.activity, r.horas, r.note || '']; }));
+      var csv = '﻿' + out.map(function (a) { return a.map(csvEscape).join(';'); }).join('\n');
+      return saveFile('Project_Manager_Horas_' + mo[n.getMonth()] + '-' + pad(n.getDate()) + '-' + n.getFullYear() + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    }, L('CSV listo para descargar.', 'CSV ready to download.'));
+  };
+  var setF = function (k, v) { var o = Object.assign({}, ed); o[k] = v; setEd(o); };
+  return h('div', { className: 'flex flex-col gap-4' },
+    h('div', { className: 'hint', style: { margin: 0 } }, L('Horas semanales registradas por los aliados de SAI Group. Ellos solo pueden registrar: la edición y el borrado son exclusivos de administrador y gerente.', 'Weekly hours logged by SAI Group allies. They can only log: editing and deleting are restricted to administrator and manager.')),
+    ed ? h('section', { className: 'panel p-4 flex flex-col gap-3' },
+      h('div', { className: 'eyebrow' }, L('Editar registro de ', 'Edit entry of ') + ed.ownerName),
+      h('div', { className: 'grid gap-3', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' } },
+        h(TxtIn, { id: 'pm-d', type: 'date', label: L('Fecha', 'Date'), value: ed.date, onChange: function (v) { setF('date', v); } }),
+        h(TxtIn, { id: 'pm-p', label: L('Proyecto / campo', 'Project / field'), value: ed.project, onChange: function (v) { setF('project', v); } }),
+        h(TxtIn, { id: 'pm-h', label: L('Horas', 'Hours'), value: String(ed.horas), onChange: function (v) { setF('horas', v); } }),
+        h(TxtIn, { id: 'pm-n', label: L('Notas', 'Notes'), value: ed.note || '', onChange: function (v) { setF('note', v); } })),
+      h('div', { className: 'nf' }, h('label', { htmlFor: 'pm-a', className: 'lbl' }, L('Actividad realizada', 'Activity performed')), h('textarea', { id: 'pm-a', className: 'in ta', rows: 2, value: ed.activity, onChange: function (e) { setF('activity', e.target.value); } })),
+      h('div', { className: 'flex gap-2' }, h('button', { type: 'button', className: 'btn2 prim', onClick: save }, L('Guardar cambios', 'Save changes')), h('button', { type: 'button', className: 'btn2', onClick: function () { setEd(null); setErr(''); } }, L('Cancelar', 'Cancel')))) : null,
+    err ? h('div', { role: 'alert', className: 'hint', style: { color: 'var(--crit)', margin: 0 } }, err) : null,
+    h('section', { className: 'panel p-4 flex flex-wrap items-end gap-4' },
+      h('div', { style: { flex: '1 1 220px' } }, h(SelIn, { id: 'pm-who', label: L('Persona', 'Person'), value: who, onChange: setWho, options: [['all', L('Todos', 'Everyone')]].concat(owners.map(function (o) { return [o, nameOf({ owner: o, ownerName: (rows.filter(function (r) { return r.owner === o; })[0] || {}).ownerName })]; })) })),
+      h('div', { style: { flex: '1 1 150px' } }, h(TxtIn, { id: 'pm-from', type: 'date', label: L('Desde', 'From'), value: from, onChange: setFrom })),
+      h('div', { style: { flex: '1 1 150px' } }, h(TxtIn, { id: 'pm-to', type: 'date', label: L('Hasta', 'To'), value: to, onChange: setTo })),
+      h('button', { type: 'button', className: 'btn2 prim', disabled: !list.length, onClick: doCsv }, h(Icon, { n: 'download', s: 14 }), L('Exportar CSV', 'Export CSV'))),
+    h('section', { className: 'panel p-4' },
+      h('div', { className: 'eyebrow', style: { marginBottom: 8 } }, L('Resumen semanal por persona', 'Weekly summary by person') + ' · ' + L('Total ', 'Total ') + nf(total, 2) + ' h'),
+      sumL.length ? h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' }, h('thead', null, h('tr', null, [L('Semana (lunes)', 'Week (Monday)'), L('Persona', 'Person'), L('Horas', 'Hours')].map(function (c, i) { return h('th', { key: i }, c); }))),
+        h('tbody', null, sumL.map(function (x) { return h('tr', { key: x.owner + x.week }, h('td', { className: 'mono' }, x.week), h('td', null, nameOf({ owner: x.owner, ownerName: (rows.filter(function (r) { return r.owner === x.owner; })[0] || {}).ownerName })), h('td', { className: 'mono' }, nf(x.h, 2))); }))))
+        : h('div', { className: 'hint' }, L('Sin horas registradas en el período.', 'No hours logged in the period.'))),
+    list.length ? h('section', { className: 'panel p-4' }, h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' },
+      h('thead', null, h('tr', null, [L('Fecha', 'Date'), L('Persona', 'Person'), L('Proyecto', 'Project'), L('Actividad', 'Activity'), L('Horas', 'Hours'), ''].map(function (c, i) { return h('th', { key: i }, c); }))),
+      h('tbody', null, list.map(function (r) {
+        return h('tr', { key: r.id }, h('td', { className: 'mono' }, r.date), h('td', null, nameOf(r)), h('td', { style: { whiteSpace: 'normal' } }, r.project),
+          h('td', { style: { whiteSpace: 'normal', minWidth: 260 } }, r.activity, r.note ? h('div', { className: 'hint', style: { margin: '2px 0 0', fontStyle: 'italic' } }, r.note) : null, r.edited ? h('div', { className: 'hint', style: { margin: '2px 0 0' } }, L('Editado ', 'Edited ') + String(r.edited).slice(0, 10)) : null),
+          h('td', { className: 'mono' }, nf(+r.horas, 2)),
+          h('td', null, h('div', { className: 'flex gap-2' }, h('button', { type: 'button', className: 'btn2', onClick: function () { setErr(''); setEd(Object.assign({}, r)); } }, L('Editar', 'Edit')),
+            h(ConfirmBtn, { label: L('Eliminar', 'Delete'), confirmLabel: L('Confirmar', 'Confirm'), onConfirm: function () { del(r); } }))));
+      })))) ) : null);
+}
 function Tabs(p) {
   return h('div', { className: 'tabs', role: 'tablist' },
     p.tabs.map(function (t) {
@@ -5395,19 +5475,20 @@ function App() {
       h('div', { style: { minWidth: 0, flex: '1 1 320px' } },
         h('div', { className: 'eyebrow mb-1' }, L('Optimización y reactivación de pozos · Occidente y Oriente VZLA', 'Well optimization and reactivation · Western & Eastern Venezuela')),
         h('h1', { className: 'disp wm' }, 'STRATAFLOW'),
-        h('div', { className: 'disp', style: { fontSize: 'clamp(16px, 2.4vw, 21px)', color: 'var(--accent)', fontWeight: 500 } }, mod === 'ops' ? L('Tablero operativo de pozos', 'Well operations dashboard') : mod === 'pros' ? L('Prospectividad · Jerarquía de campos y yacimientos', 'Prospectivity · Field and reservoir ranking') : mod === 'fld' ? L('Análisis de campo · Chimire', 'Field analysis · Chimire') : mod === 'pred' ? L('Predictivo · Escenarios Monte Carlo por campo y yacimiento', 'Predictive · Monte Carlo scenarios by field and reservoir') : mod === 'map' ? L('Mapas · Pozos con coordenadas, candidatos y filtros', 'Maps · Wells with coordinates, candidates and filters') : mod === 'time' ? L('Tiempo invertido · Plan Acelerado de Reactivación de Pozos', 'Time invested · Accelerated Well Reactivation Plan') : L('Evaluación económica · Plan Acelerado de Producción 2027', 'Economic evaluation · 2027 Accelerated Production Plan'))),
+        h('div', { className: 'disp', style: { fontSize: 'clamp(16px, 2.4vw, 21px)', color: 'var(--accent)', fontWeight: 500 } }, mod === 'ops' ? L('Tablero operativo de pozos', 'Well operations dashboard') : mod === 'pros' ? L('Prospectividad · Jerarquía de campos y yacimientos', 'Prospectivity · Field and reservoir ranking') : mod === 'fld' ? L('Análisis de campo · Chimire', 'Field analysis · Chimire') : mod === 'pred' ? L('Predictivo · Escenarios Monte Carlo por campo y yacimiento', 'Predictive · Monte Carlo scenarios by field and reservoir') : mod === 'map' ? L('Mapas · Pozos con coordenadas, candidatos y filtros', 'Maps · Wells with coordinates, candidates and filters') : mod === 'pm' ? L('Project Manager · Horas semanales de SAI Group', 'Project Manager · SAI Group weekly hours') : mod === 'time' ? L('Tiempo invertido · Plan Acelerado de Reactivación de Pozos', 'Time invested · Accelerated Well Reactivation Plan') : L('Evaluación económica · Plan Acelerado de Producción 2027', 'Economic evaluation · 2027 Accelerated Production Plan'))),
       h('div', { className: 'flex flex-col items-end gap-2' },
         h('div', { className: 'flex items-center gap-2', role: 'group', 'aria-label': L('Idioma', 'Language') }, h(Icon, { n: 'globe', s: 18 }),
           h('div', { className: 'seg' }, ['EN', 'ES'].map(function (l) { var c = l.toLowerCase(); return h('button', { key: l, type: 'button', className: 'btn', 'aria-pressed': lang === c, onClick: function () { setLang(c); } }, l); }))),
         h('span', { className: 'pill', style: { '--sc': chip[1] } }, h(Icon, { n: 'cloud', s: 13 }), chip[0]))),
     h('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-4' },
-      h(Tabs, { value: mod, onChange: setMod, tabs: [['pred', L('Predictivo', 'Predictive')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['time', L('Tiempo del consultor', 'Consultant time')], ['lib', L('Biblioteca', 'Library')]] }),
+      h(Tabs, { value: mod, onChange: setMod, tabs: [['pred', L('Predictivo', 'Predictive')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['time', L('Tiempo del consultor', 'Consultant time')]].concat(window.OPT_ROLE === 'admin' || window.OPT_ROLE === 'gerente' ? [['pm', 'Project Manager']] : []).concat([['lib', L('Biblioteca', 'Library')]]) }),
       mod === 'ops' ? h(Tabs, { value: view, onChange: function (v) { setView(v); }, tabs: [['board', L('Tablero', 'Dashboard')], ['baskets', L('Cestas de trabajo', 'Work baskets'), counts.data + counts.minor + counts.major]] }) : null),
     mod === 'ops' ? (view === 'board' ? h(Tablero, { nav: nav, setNav: setNav, ctx: ctx }) : h(Cestas, { entries: entries, openWell: openWell, runExport: runExport, save: store.save }))
       : mod === 'pros' ? h(ProsTab, { runExport: runExport })
       : mod === 'fld' ? h(FieldTab, { runExport: runExport })
       : mod === 'pred' ? h(PredTab, { runExport: runExport })
      
+      : mod === 'pm' && (window.OPT_ROLE === 'admin' || window.OPT_ROLE === 'gerente') ? h(PMTab, { runExport: runExport })
       : mod === 'lib' ? h(LibTab, { lib: store.data.library, save: store.save, remove: store.remove, runExport: runExport, toast: toast, canWrite: store.canWrite, persist: store.mode === 'cloud' })
       : mod === 'time' ? h(TimeLog, { entries: store.data.timelog, save: store.save, remove: store.remove, runExport: runExport })
       : h(Econ, { wells: wells, entries: entries, fields: fields, reservoirs: store.data.reservoirs, fieldById: fieldById, runExport: runExport }),
