@@ -35,6 +35,9 @@
     '.pb-tree li::before,.pb-tree li::after{content:"";position:absolute;top:0;right:50%;width:50%;height:22px;border-top:1px solid var(--pb-line)}.pb-tree li::after{right:auto;left:50%;border-left:1px solid var(--pb-line)}.pb-tree>ul>li::before,.pb-tree>ul>li::after{display:none}.pb-tree li:only-child::before,.pb-tree li:only-child::after{display:none}.pb-tree li:first-child::before,.pb-tree li:last-child::after{border:0}.pb-tree li:last-child::before{border-right:1px solid var(--pb-line);border-radius:0 8px 0 0}.pb-tree li:first-child::after{border-radius:8px 0 0 0}.pb-tree ul ul::before{content:"";position:absolute;top:0;left:50%;height:22px;border-left:1px solid var(--pb-line)}' +
     '.pb-ocard{display:inline-flex;flex-direction:column;align-items:center;gap:3px;width:158px;padding:10px 8px;background:var(--pb-panel2);border:1px solid var(--pb-line);border-radius:10px;cursor:pointer}.pb-ocard:hover{border-color:var(--pb-acc)}.pb-solos{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}.pb-typing{align-self:flex-start;font-size:12px;color:var(--pb-muted);font-style:italic;padding:2px 4px}.pb-sn{font-size:11px;font-weight:700;color:var(--pb-acc);margin-bottom:2px}.pb-gav{background:var(--pb-acc)!important;color:#1a1205!important}' +
     '.pb-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:64px;background:var(--pb-panel2);border:1px solid var(--pb-acc);border-radius:8px;padding:8px 14px;z-index:10001;font-size:13px}' +
+    '.pb-ann{display:block;width:100%;text-align:left;background:var(--pb-panel2);border:1px solid var(--pb-line);border-left:4px solid var(--pb-acc);border-radius:10px;padding:12px 14px;margin:0 0 10px;cursor:pointer}.pb-ann.new{border-left-color:#e5484d;background:var(--pb-panel)}.pb-ann:hover{border-color:var(--pb-acc)}' +
+    '.pb-ann h3{margin:0 0 3px;font-size:15px;font-weight:700}.pb-ann p{margin:6px 0 0;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}.pb-ann .pb-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}' +
+    '.pb-pick{max-height:260px;overflow:auto;border:1px solid var(--pb-line);border-radius:8px;padding:4px 8px}.pb-pick label{display:flex;gap:8px;align-items:center;padding:5px 2px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--pb-line)}.pb-pick label:last-child{border-bottom:0}' +
     '.pb-back{display:none}' +
     '@media (max-width:760px){.pb-chat{grid-template-columns:1fr;height:78vh}.pb-chat.th .pb-inbox{display:none}.pb-chat:not(.th) .pb-th{display:none}.pb-back{display:inline-flex}.pb-az{display:none}.pb-m{max-width:88%}.pb-ov{padding:0}.pb-modal{border-radius:0;min-height:100vh}}' +
     '@media (prefers-reduced-motion:reduce){.pb-card{transition:none}}';
@@ -113,7 +116,7 @@
     var base = p.ficha, nuevo = !base;
     var s1 = useState(null), f = s1[0], setF = s1[1], s2 = useState({}), errs = s2[0], setErrs = s2[1], s3 = useState(false), busy = s3[0], setBusy = s3[1], s4 = useState(false), crop = s4[0], setCrop = s4[1], s5 = useState(''), top = s5[0], setTop = s5[1];
     useEffect(function () {
-      if (nuevo) { setF({ nombres: '', apellidos: '', cargo: '', departamento: '', sede: '', jefe_id: '', correo: '', telefono: '', extension: '', celular: '', whatsapp: '', foto: null, fecha_ingreso: '', idiomas: '', habilidades: '', biografia: '', estado: 'disponible', visibilidad: { correo: true, telefono: true, celular: false, whatsapp: false, fecha_ingreso: false, biografia: true } }); return; }
+      if (nuevo) { setF({ nombres: '', apellidos: '', cargo: '', gerencia: '', departamento: '', nivel: 'miembro', sede: '', jefe_id: '', correo: '', telefono: '', extension: '', celular: '', whatsapp: '', foto: null, fecha_ingreso: '', idiomas: '', habilidades: '', biografia: '', estado: 'disponible', visibilidad: { correo: true, telefono: true, celular: false, whatsapp: false, fecha_ingreso: false, biografia: true } }); return; }
       sb().from('pb_fichas').select('*').eq('id', base.id).single().then(function (r) {
         if (r.error) { setTop(U.errMsg(r.error)); return; }
         var d = r.data; setF(Object.assign({}, d, { jefe_id: d.jefe_id || '', fecha_ingreso: d.fecha_ingreso || '', idiomas: (d.idiomas || []).join(', '), habilidades: (d.habilidades || []).join(', '), visibilidad: Object.assign({ correo: true, telefono: true, celular: false, whatsapp: false, fecha_ingreso: false, biografia: true }, d.visibilidad || {}) }));
@@ -128,11 +131,15 @@
       ['telefono', 'celular', 'whatsapp'].forEach(function (k) { if (!U.phoneOk(U.normPhone(f[k]))) e[k] = 'Teléfono no válido (7 a 15 dígitos).'; });
       if (f.fecha_ingreso && !/^\d{4}-\d{2}-\d{2}$/.test(f.fecha_ingreso)) e.fecha_ingreso = 'Fecha no válida.';
       if (f.biografia.length > 1000) e.biografia = 'Máximo 1.000 caracteres.';
+      if (f.departamento && !f.gerencia) e.gerencia = 'Elige primero la gerencia.';
+      if (f.nivel === 'gerente' && !f.gerencia) e.nivel = 'Un gerente necesita una gerencia asignada.';
+      if (f.nivel === 'lider_depto' && !f.departamento) e.nivel = 'Un líder de departamento necesita un departamento asignado.';
       setErrs(e); return !Object.keys(e).length;
     }
     async function save() {
       if (!validate()) return; setBusy(true); setTop('');
-      var row = { nombres: f.nombres.trim(), apellidos: f.apellidos.trim(), cargo: f.cargo.trim(), departamento: f.departamento.trim(), sede: f.sede.trim(), jefe_id: f.jefe_id || null, correo: f.correo.trim(), telefono: U.normPhone(f.telefono), extension: f.extension.trim(), celular: U.normPhone(f.celular), whatsapp: U.normPhone(f.whatsapp), foto: f.foto || null, fecha_ingreso: f.fecha_ingreso || null, idiomas: U.listOf(f.idiomas), habilidades: U.listOf(f.habilidades), biografia: f.biografia.trim(), estado: f.estado, visibilidad: f.visibilidad };
+      var row = { nombres: f.nombres.trim(), apellidos: f.apellidos.trim(), cargo: f.cargo.trim(), gerencia: f.gerencia || '', departamento: f.departamento || '', sede: f.sede.trim(), jefe_id: f.jefe_id || null, correo: f.correo.trim(), telefono: U.normPhone(f.telefono), extension: f.extension.trim(), celular: U.normPhone(f.celular), whatsapp: U.normPhone(f.whatsapp), foto: f.foto || null, fecha_ingreso: f.fecha_ingreso || null, idiomas: U.listOf(f.idiomas), habilidades: U.listOf(f.habilidades), biografia: f.biografia.trim(), estado: f.estado, visibilidad: f.visibilidad };
+      if (U.isAdm()) row.nivel = f.nivel || 'miembro';
       var r = nuevo ? await sb().from('pb_fichas').insert(row) : await sb().from('pb_fichas').update(row).eq('id', base.id);
       setBusy(false);
       if (r.error) { setTop(U.errMsg(r.error)); return; }
@@ -155,7 +162,14 @@
       h('p', { className: 'pb-hint' }, 'Los campos con ', h('span', { className: 'pb-req' }, '*'), ' son obligatorios.'),
       h('div', { className: 'pb-g2' },
         inp('nombres', 'Nombres', { req: true, max: 80 }), inp('apellidos', 'Apellidos', { max: 80 }),
-        inp('cargo', 'Cargo'), inp('departamento', 'Departamento / gerencia', { max: 80 }), inp('sede', 'Sede / ubicación', { max: 80 }),
+        inp('cargo', 'Cargo'),
+        h(Field, { id: 'pbf-gerencia', label: 'Gerencia', err: errs.gerencia }, h('select', { id: 'pbf-gerencia', className: 'pb-in', value: f.gerencia || '', onChange: function (e) { setF(function (o) { return Object.assign({}, o, { gerencia: e.target.value, departamento: '' }); }); } },
+          h('option', { value: '' }, '— Sin asignar —'), core.gerencias().map(function (g) { return h('option', { key: g, value: g }, g); }))),
+        h(Field, { id: 'pbf-departamento', label: 'Departamento', hint: f.gerencia ? '' : 'Elige primero la gerencia.' }, h('select', { id: 'pbf-departamento', className: 'pb-in', value: f.departamento || '', disabled: !f.gerencia, onChange: function (e) { set('departamento', e.target.value); } },
+          h('option', { value: '' }, '— Sin asignar —'), core.deptos(f.gerencia || '').map(function (d) { return h('option', { key: d, value: d }, d); }))),
+        U.isAdm() ? h(Field, { id: 'pbf-nivel', label: 'Nivel en la organización', err: errs.nivel, hint: 'Define quién puede enviar anuncios a toda su gerencia o departamento. Solo lo asigna administración.' }, h('select', { id: 'pbf-nivel', className: 'pb-in', value: f.nivel || 'miembro', onChange: function (e) { set('nivel', e.target.value); } },
+          [['miembro', 'Miembro'], ['lider_depto', 'Líder de departamento'], ['gerente', 'Gerente de la gerencia']].map(function (o) { return h('option', { key: o[0], value: o[0] }, o[1]); }))) : null,
+        inp('sede', 'Sede / ubicación', { max: 80 }),
         h(Field, { id: 'pbf-jefe', label: 'Jefe directo' }, h('select', { id: 'pbf-jefe', className: 'pb-in', value: f.jefe_id, onChange: function (e) { set('jefe_id', e.target.value); } }, h('option', { value: '' }, '— Ninguno —'), jefes.map(function (j) { return h('option', { key: j.id, value: j.id }, full(j)); }))),
         inp('correo', 'Correo corporativo', { type: 'email', max: 160 }), inp('telefono', 'Teléfono fijo', { type: 'tel', max: 40 }), inp('extension', 'Extensión', { max: 12 }),
         inp('celular', 'Celular', { type: 'tel', max: 40 }), inp('whatsapp', 'WhatsApp (opcional)', { type: 'tel', max: 40 }), inp('fecha_ingreso', 'Fecha de ingreso', { type: 'date' }),
@@ -166,7 +180,7 @@
         h('legend', { style: { fontSize: 12.5, fontWeight: 600, padding: '0 6px' } }, 'Privacidad: ¿qué datos pueden ver los demás?'),
         h('div', { className: 'pb-g2' }, U.CAMPOS_PRIV.map(function (c) {
           return h('label', { key: c[0], className: 'pb-sw' }, h('input', { type: 'checkbox', checked: !!f.visibilidad[c[0]], onChange: function (e) { var v = Object.assign({}, f.visibilidad); v[c[0]] = e.target.checked; set('visibilidad', v); } }), c[1]);
-        })), h('div', { className: 'pb-hint' }, 'Tu nombre, cargo, departamento, sede, fotografía y disponibilidad siempre son visibles. Administración puede ver todos los datos.')),
+        })), h('div', { className: 'pb-hint' }, 'Tu nombre, cargo, gerencia, departamento, sede, fotografía y disponibilidad siempre son visibles. Administración puede ver todos los datos.')),
       h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 } },
         h('button', { type: 'button', className: 'pb-b', onClick: p.onClose }, 'Cancelar'),
         h('button', { type: 'button', className: 'pb-b prim', disabled: busy, onClick: save }, busy ? 'Guardando…' : 'Guardar')));
@@ -188,7 +202,7 @@
       h('div', { style: { display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' } },
         h(Avatar, { f: f, size: 88, estado: est }),
         h('div', { style: { minWidth: 0, flex: 1 } }, h('div', { className: 'disp', style: { fontSize: 24, fontWeight: 700 } }, full(f)), h('div', null, f.cargo || 'Sin cargo registrado'),
-          h('div', { className: 'pb-sub' }, [f.departamento, f.sede].filter(Boolean).join(' · ') || 'Sin departamento ni sede'),
+          h('div', { className: 'pb-sub' }, [f.departamento, f.gerencia, f.sede].filter(Boolean).join(' · ') || 'Sin gerencia, departamento ni sede'),
           h('div', { className: 'pb-sub', style: { color: U.ESTADO_COLOR[est] } }, '● ' + U.ESTADOS[est], f.activo ? '' : ' · Ficha desactivada'))),
       h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', margin: '14px 0' } },
         canChat ? h('button', { type: 'button', className: 'pb-b prim', onClick: function () { p.onChat(f); } }, h(Ico, { n: 'chat', s: 14 }), 'Chatear') : null,
@@ -198,6 +212,7 @@
         h('button', { type: 'button', className: 'pb-b', onClick: copy }, h(Ico, { n: 'copy', s: 14 }), 'Copiar contacto'),
         h('button', { type: 'button', className: 'pb-b', onClick: function () { U.download('Contacto_' + U.safeName(full(f)).replace(/ /g, '_') + '_' + U.stamp() + '.vcf', U.vcard(f), 'text/vcard'); } }, h(Ico, { n: 'dl', s: 14 }), 'Descargar tarjeta (.vcf)')),
       row('Correo', f.correo), row('Teléfono', f.telefono && (f.telefono + (f.extension ? ' · ext. ' + f.extension : ''))), row('Celular', f.celular), row('WhatsApp', f.whatsapp),
+      row('Gerencia', f.gerencia), row('Departamento', f.departamento), row('Rol', f.nivel === 'gerente' ? 'Gerente de la gerencia' : f.nivel === 'lider_depto' ? 'Líder de departamento' : ''),
       row('Jefe directo', jefe && h('button', { type: 'button', className: 'pb-b', style: { padding: '2px 8px' }, onClick: function () { p.onOpen(jefe); } }, full(jefe))),
       row('Supervisados', subs.length ? subs.map(function (s) { return h('button', { key: s.id, type: 'button', className: 'pb-b', style: { padding: '2px 8px', margin: '0 4px 4px 0' }, onClick: function () { p.onOpen(s); } }, full(s)); }) : null),
       row('Fecha de ingreso', U.fmtDate(f.fecha_ingreso)),

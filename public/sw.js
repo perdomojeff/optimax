@@ -9,16 +9,16 @@ self.addEventListener('push', function (e) {
     for (var i = 0; i < cs.length; i++) if (cs[i].visibilityState === 'visible' && cs[i].focused) return;
     return self.registration.showNotification(d.title || 'StrataFlow', {
       body: d.body || 'Tienes un mensaje nuevo', tag: d.tag || 'pb', icon: '/icon-192.png', badge: '/icon-192.png',
-      data: { peer: d.peer || '', grupo: d.grupo || '' }, renotify: true
+      data: { peer: d.peer || '', grupo: d.grupo || '', anuncio: d.anuncio || '' }, renotify: true
     });
   }));
 });
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
-  var dt = e.notification.data || {}, q = dt.grupo ? '?grupo=' + encodeURIComponent(dt.grupo) : dt.peer ? '?chat=' + encodeURIComponent(dt.peer) : '';
+  var dt = e.notification.data || {}, q = dt.anuncio ? '?anuncios=1' : dt.grupo ? '?grupo=' + encodeURIComponent(dt.grupo) : dt.peer ? '?chat=' + encodeURIComponent(dt.peer) : '';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
     for (var i = 0; i < cs.length; i++) {
-      if ('focus' in cs[i]) { cs[i].postMessage({ type: 'pb-open', peer: dt.peer || '', grupo: dt.grupo || '' }); return cs[i].focus(); }
+      if ('focus' in cs[i]) { cs[i].postMessage({ type: 'pb-open', peer: dt.peer || '', grupo: dt.grupo || '', anuncio: dt.anuncio || '' }); return cs[i].focus(); }
     }
     return self.clients.openWindow('/' + q);
   }));

@@ -33,6 +33,29 @@ function enDnd(s: { dnd: boolean; dnd_from: string; dnd_to: string; tz_offset: n
   return f <= t ? local >= f && local < t : local >= f || local < t;
 }
 
+async function enviarAnuncio(id: string, cfg: Record<string, string>) {
+  const { data: a } = await sb.from('pb_anuncios').select('de,titulo,cuerpo').eq('id', id).maybeSingle();
+  if (!a) return { enviados: 0 };
+  const { data: dest } = await sb.from('pb_anuncio_destinos').select('user_id').eq('anuncio_id', id);
+  const { data: remit } = await sb.from('pb_fichas').select('nombres,apellidos').eq('user_id', a.de).maybeSingle();
+  const quien = remit ? `${remit.nombres} ${remit.apellidos}`.trim() : 'Anuncio';
+  const { data: subs } = await sb.from('pb_push').select('*').in('user_id', (dest || []).map((x: { user_id: string }) => x.user_id));
+  webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT') || 'mailto:soporte@strataflow.app', cfg.vapid_public, cfg.vapid_private);
+  let enviados = 0;
+  await Promise.allSettled((subs || []).map(async (s: any) => {
+    if (enDnd(s)) return;
+    const payload = JSON.stringify({ title: `📢 ${a.titulo} · ${quien}`, body: s.preview ? String(a.cuerpo).slice(0, 120) : 'Tienes un anuncio nuevo', tag: 'pb-a-' + id, peer: '', grupo: '', anuncio: id });
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'high' });
+      enviados++;
+    } catch (e: any) {
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) await sb.from('pb_push').delete().eq('id', s.id);
+      else console.error('push anuncio', e && e.statusCode, e && e.body);
+    }
+  }));
+  return { enviados };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
@@ -41,7 +64,8 @@ Deno.serve(async (req) => {
     if (req.method !== 'POST') return json({ error: 'método no permitido' }, 405);
     if (!cfg.webhook_secret || req.headers.get('x-pb-secret') !== cfg.webhook_secret) return json({ error: 'no autorizado' }, 401);
 
-    const m = await req.json() as { de: string; para: string | null; grupo_id: string | null; cuerpo: string; adjunto: boolean };
+    const m = await req.json() as { de: string; para: string | null; grupo_id: string | null; cuerpo: string; adjunto: boolean; anuncio_id?: string };
+    if (m.anuncio_id) return json(await enviarAnuncio(m.anuncio_id, cfg));
     let destinos: string[] = [], titulo = 'StrataFlow', etiqueta = '';
     const { data: remit } = await sb.from('pb_fichas').select('nombres,apellidos').eq('user_id', m.de).maybeSingle();
     const quien = remit ? `${remit.nombres} ${remit.apellidos}`.trim() : 'Nuevo mensaje';
