@@ -1,0 +1,41 @@
+/* StrataFlow · temas oscuro y claro. Paleta DAEG (Azul Marino #032C4D, Azul Profundo #054C71, Azul Petróleo #0878A0,
+   Cian Claro #7EB7CC, Ocre #966E38, Gris Grafito #4D5359, Gris Niebla #DAE2E5, Blanco Hielo #F4F8FA).
+   El banner de cabecera (balancín) conserva siempre su escena azul marino: por eso redefine las variables oscuras. */
+:root, .bn {
+  --bg: #021b31;
+  --panel: #032c4d;
+  --panel2: #063a60;
+  --line: #0e4a70;
+  --fg: #f4f8fa;
+  --muted: #8fb4c6;
+  --accent: #7eb7cc;
+  --on-accent: #021b31;
+  --on-crit: #1a0705;
+  --good: #4fbf9f;
+  --warn: #d9a860;
+  --crit: #f0776c;
+  --info: #4aa8c9;
+  --c3: #a9b57a;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f4f8fa;
+  --panel: #ffffff;
+  --panel2: #eaf1f5;
+  --line: #cfdce3;
+  --fg: #032c4d;
+  --muted: #4d5359;
+  --accent: #0878a0;
+  --on-accent: #ffffff;
+  --on-crit: #ffffff;
+  --good: #2e7d5b;
+  --warn: #966e38;
+  --crit: #b3362c;
+  --info: #0878a0;
+  --c3: #5c6440;
+  color-scheme: light;
+}
+/* botón de tema (sol / luna) */
+.sf-theme-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); cursor: pointer; padding: 0; }
+.sf-theme-btn:hover { border-color: var(--accent); }
+.sf-theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

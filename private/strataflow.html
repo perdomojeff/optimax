@@ -1,27 +1,29 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0}</style>
 <title>StrataFlow</title>
+<script src="/theme.js"></script>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 /* Layout: control-room dashboard. Header + module tabs, then drill-down board (field > reservoir > well file) or basket lists. Single dark look by choice. */
 :root {
-  --bg: #0a1114;
-  --panel: #111b20;
-  --panel2: #16242b;
-  --line: #26373f;
-  --fg: #e8eff2;
-  --muted: #8fa3ad;
-  --accent: #f0a540;
-  --good: #3dbb8d;
-  --warn: #e9b949;
-  --crit: #e5594f;
+  /* colores: ver /theme.css (temas oscuro y claro); estos valores solo son el respaldo */
+  --bg: #021b31;
+  --panel: #032c4d;
+  --panel2: #063a60;
+  --line: #0e4a70;
+  --fg: #f4f8fa;
+  --muted: #8fb4c6;
+  --accent: #7eb7cc;
+  --on-accent: #021b31;
+  --good: #4fbf9f;
+  --warn: #d9a860;
+  --crit: #f0776c;
   --info: #4aa8c9;
-  --c3: #b794ec;
+  --c3: #a9b57a;
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  color-scheme: dark;
 }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
 #root { min-height: 100vh; }
@@ -51,10 +53,10 @@ select.in { appearance: auto; }
 .rng::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--fg); border: 3px solid var(--accent); }
 .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; max-width: 100%; }
 .btn { border: 0; background: transparent; color: var(--muted); font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.btn[aria-pressed="true"] { background: var(--accent); color: #1a1205; }
+.btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #1a1205); }
 .btn2 { display: inline-flex; align-items: center; gap: 6px; background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 11px; font-size: 13px; font-weight: 500; cursor: pointer; }
-.btn2.prim { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }
-.btn2.crit { background: var(--crit); border-color: var(--crit); color: #1a0705; font-weight: 600; }
+.btn2.prim { background: var(--accent); color: var(--on-accent, #1a1205); border-color: var(--accent); font-weight: 600; }
+.btn2.crit { background: var(--crit); border-color: var(--crit); color: var(--on-crit, #1a0705); font-weight: 600; }
 .btn2:disabled { opacity: 0.5; cursor: not-allowed; }
 .tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .tab { background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 8px; padding: 7px 13px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
@@ -92,7 +94,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
 @media (prefers-reduced-motion: no-preference) { .btn, .cat, .tab, .btn2, .card-btn { transition: background .15s, border-color .15s; } }
 
 /* Banner de cabecera: escena petrolera (Lago de Maracaibo al atardecer) */
-.bn { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 52px; min-height: 160px; background: linear-gradient(100deg, #0e191e 0%, #0b1317 52%, #13202a 100%); }
+.bn { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 52px; min-height: 160px; background: linear-gradient(100deg, #021b31 0%, #032c4d 55%, #054c71 100%); color: var(--fg); }
 .bn > *:not(.bn-art) { position: relative; z-index: 1; }
 .bn > :last-child { position: static; }
 .bn-art { position: absolute; top: 0; right: 0; bottom: 0; width: min(62%, 640px); pointer-events: none; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 38%); mask-image: linear-gradient(to right, transparent 0, #000 38%); }
@@ -107,7 +109,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
 @keyframes bnRod { from { transform: translateY(6px); } to { transform: translateY(-6px); } }
 @keyframes bnSpin { to { transform: rotate(360deg); } }
 @keyframes bnFlick { from { transform: scale(.92, .8); opacity: .85; } to { transform: scale(1.05, 1.12); opacity: 1; } }
-.bn .pill { position: absolute; left: 22px; bottom: 14px; z-index: 2; background: rgba(10,17,20,.72); }
+.bn .pill { position: absolute; left: 22px; bottom: 14px; z-index: 2; background: rgba(2,27,49,.72); }
 @media (max-width: 640px) {
   .bn { padding: 14px 14px 12px; min-height: 0; }
   .bn > :last-child { display: contents; }
@@ -117,6 +119,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { .bn-beam, .bn-rod, .bn-crank, .bn-flame { animation: none; } }
 </style>
+<link rel="stylesheet" href="/theme.css">
 <div id="root"></div>
 <script>
 /* StrataFlow · capa de compatibilidad window.claude -> Supabase (se ejecuta tras el login) */
@@ -171,9 +174,9 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
 
   /* barra superior: usuario, rol, salir, y carga del Libro (solo admin) */
   var bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:9999;background:#14202b;color:#cfd8dc;border:1px solid #2c3e4c;border-radius:8px;padding:6px 10px;font:12px IBM Plex Sans,sans-serif;display:flex;gap:10px;align-items:center';
+  bar.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:9999;background:var(--panel2,#063a60);color:var(--fg,#f4f8fa);border:1px solid var(--line,#0e4a70);border-radius:8px;box-shadow:0 2px 10px rgba(2,27,49,.25);padding:6px 10px;font:12px IBM Plex Sans,sans-serif;display:flex;gap:10px;align-items:center';
   var tx = document.createElement('span'); tx.textContent = (me.disp || me.email || '') + ' · ' + (role === 'gerente' ? 'Gerente' : role); bar.appendChild(tx);
-  function btn(t, f) { var b = document.createElement('button'); b.textContent = t; b.style.cssText = 'background:#e08a1e;color:#111;border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px IBM Plex Sans,sans-serif'; b.onclick = f; bar.appendChild(b); return b; }
+  function btn(t, f) { var b = document.createElement('button'); b.textContent = t; b.style.cssText = 'background:var(--accent,#7eb7cc);color:var(--on-accent,#021b31);border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px IBM Plex Sans,sans-serif'; b.onclick = f; bar.appendChild(b); return b; }
   btn('Salir', async function () { await sb.auth.signOut(); location.reload(); });
   if (role === 'admin') {
     sb.from('fact_reservas').select('reserva_key', { count: 'exact', head: true }).then(function (r) {
@@ -982,6 +985,8 @@ var ICONS = {
   timer: [['line', { x1: 10, x2: 14, y1: 2, y2: 2 }], ['line', { x1: 12, x2: 15, y1: 14, y2: 11 }], ['circle', { cx: 12, cy: 14, r: 8 }]],
   trend: [['polyline', { points: '22 7 13.5 15.5 8.5 10.5 2 17' }], ['polyline', { points: '16 7 22 7 22 13' }]],
   gauge: [['path', { d: 'm12 14 4-4' }], ['path', { d: 'M3.34 19a10 10 0 1 1 17.32 0' }]],
+  sun: [['circle', { cx: 12, cy: 12, r: 4 }], ['path', { d: 'M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4' }]],
+  moon: [['path', { d: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z' }]],
   globe: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20' }], ['path', { d: 'M2 12h20' }]],
   dollar: [['line', { x1: 12, x2: 12, y1: 2, y2: 22 }], ['path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' }]],
   droplet: [['path', { d: 'M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z' }]],
@@ -1002,6 +1007,19 @@ function Icon(p) {
   var s = p.s || 16;
   return h('svg', { width: s, height: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, style: { flex: 'none' } },
     ICONS[p.n].map(function (x, i) { return h(x[0], Object.assign({ key: i }, x[1])); }));
+}
+
+/* colores de región/categoría fijos (también usados en los PDF): en pantalla oscura se aclaran para que se lean sobre azul marino */
+function scrCol(c) {
+  var m = { '#1B5FAA': '#6AA9EE', '#6B3FA0': '#B491E6', '#2E7D5B': '#4FBF9F', '#0E8FA8': '#4CC3DC', '#8A8F94': '#AEB6BB', '#5b6b73': '#8B9AA3', '#D9730D': '#F0923A' };
+  return (window.SFTheme && window.SFTheme.get() === 'dark' && m[c]) || c;
+}
+/* botón de tema claro/oscuro (la elección se guarda en el navegador) */
+function ThemeBtn() {
+  var st = React.useState(window.SFTheme ? window.SFTheme.get() : 'dark'), t = st[0], set = st[1];
+  React.useEffect(function () { var f = function () { set(window.SFTheme.get()); }; window.addEventListener('sf-theme', f); return function () { window.removeEventListener('sf-theme', f); }; }, []);
+  var light = t === 'light';
+  return h('button', { type: 'button', className: 'sf-theme-btn', onClick: function () { window.SFTheme && window.SFTheme.toggle(); }, title: light ? L('Cambiar a tema oscuro', 'Switch to dark theme') : L('Cambiar a tema claro', 'Switch to light theme'), 'aria-label': light ? L('Cambiar a tema oscuro', 'Switch to dark theme') : L('Cambiar a tema claro', 'Switch to light theme') }, h(Icon, { n: light ? 'moon' : 'sun', s: 18 }));
 }
 
 /* ---------- form atoms ---------- */
@@ -4249,7 +4267,7 @@ function PredView(p) {
         (mac ? [['all', L('Todas', 'All'), '#5b6b73']].concat(PRED_DIV.concat(['Costa Afuera', 'Centro Sur']).map(function (d) { return [d, LANG === 'es' ? d : PRED_DIVEN[d], PRED_DIVCOL[d]]; })).concat([['custom', L('Personalizada', 'Custom') + (cust.length ? ' · ' + cust.length : ''), '#6B3FA0']]) : [['all', L('Todas', 'All'), '#5b6b73'], ['occ', L('Occidente', 'West'), '#1B5FAA'], ['ori', L('Oriente', 'East'), '#D9730D']]).map(function (r) {
           var on = reg === r[0], dv = S0.divs.filter(function (d) { return d.key === r[0]; })[0], dis = r[0] === 'Centro Sur' || (r[0] !== 'all' && r[0] !== 'Costa Afuera' && r[0] !== 'custom' && (!dv || dv.nU === 0));
           return h('button', { key: r[0], type: 'button', disabled: dis, 'aria-pressed': on, title: dis && mac ? L('Sin información cargada o sin yacimientos que cumplan la selección', 'No data loaded or no reservoirs meeting the selection') : r[0] === 'Costa Afuera' ? L('Solo reservas y premisas requeridas; sin VPN', 'Reserves and required premises only; no NPV') : undefined, onClick: function () { setReg(r[0]); setSelId('tot|'); setShown(30); }, className: 'disp',
-            style: { background: on ? r[2] : 'transparent', color: on ? '#fff' : r[2], border: '2px solid ' + r[2], padding: mac ? '8px 16px' : '8px 22px', fontSize: mac ? 15 : 17, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', borderRadius: 6, cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.4 : 1 } }, r[1] + (dv && mac && r[0] !== 'all' ? ' · ' + nf(dv.nY) : ''));
+            style: { background: on ? r[2] : 'transparent', color: on ? '#fff' : scrCol(r[2]), border: '2px solid ' + scrCol(r[2]), padding: mac ? '8px 16px' : '8px 22px', fontSize: mac ? 15 : 17, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', borderRadius: 6, cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.4 : 1 } }, r[1] + (dv && mac && r[0] !== 'all' ? ' · ' + nf(dv.nY) : ''));
         })),
       mac && reg === 'custom' ? h('div', { className: 'panel p-4 flex flex-col gap-3', style: { borderLeft: '4px solid #6B3FA0' } },
         h('div', { className: 'flex flex-wrap items-baseline justify-between gap-2' }, h('div', { className: 'eyebrow' }, L('Selección personalizada de campos', 'Custom field selection')),
@@ -5418,6 +5436,7 @@ function App() {
   var s4 = useState({}), nav = s4[0], setNav = s4[1];
   var s5 = useState(''), msg = s5[0], setMsg = s5[1];
   var toast = useCallback(function (m) { setMsg(m); }, []);
+  var thS = useState(0); useEffect(function () { var f = function () { thS[1](function (x) { return x + 1; }); }; window.addEventListener('sf-theme', f); return function () { window.removeEventListener('sf-theme', f); }; }, []);   /* redibuja al cambiar de tema */
   var pbUnread = window.PB ? window.PB.useUnread(useCallback(function (m) { setMsg('💬 ' + m); }, [])) : 0;
   useEffect(function () { if (!msg) return; var t = setTimeout(function () { setMsg(''); }, 6000); return function () { clearTimeout(t); }; }, [msg]);
   var store = useStore(function (e) { toast(e && e.message ? e.message : L('Error de datos', 'Data error')); });
@@ -5471,7 +5490,7 @@ function App() {
   var chip = store.mode === 'cloud' ? (store.canWrite ? [L('Guardado compartido activo', 'Shared saving on'), 'var(--good)'] : [window.OPT_ROLE ? L('Solo lectura (tu tiempo sí se edita)', 'Read only (your time log is editable)') : L('Solo lectura', 'Read only'), 'var(--warn)']) : store.mode === 'local' ? [L('Modo local: los datos no se guardan', 'Local mode: data is not saved'), 'var(--warn)'] : [L('Conectando…', 'Connecting…'), 'var(--muted)'];
 
   return h('div', { className: 'mx-auto w-full', style: { maxWidth: 1360, paddingInline: 16, paddingBlock: 20 } },
-    h('div', { className: 'eyebrow mb-3', style: { color: 'var(--accent)', letterSpacing: '.14em', textTransform: 'uppercase', paddingBottom: 6, borderBottom: '1px solid var(--line, rgba(128,128,128,.3))' } }, L('Dirección Acelerada de Estudios Geocientíficos', 'Accelerated Geoscience Studies Directorate')),
+    h('div', { className: 'eyebrow mb-3', style: { color: 'var(--accent)', letterSpacing: '.14em', textTransform: 'uppercase', paddingBottom: 6, borderBottom: '1px solid var(--line, rgba(128,128,128,.3))' } }, 'SAI GROUP INTERNATIONAL - DAEGCORP'),
     h('header', { className: 'bn flex flex-wrap items-start justify-between gap-4 mb-4' },
       h('div', { className: 'bn-art', 'aria-hidden': 'true', dangerouslySetInnerHTML: { __html: BANNER_SVG } }),
       h('div', { style: { minWidth: 0, flex: '1 1 320px' } },
@@ -5479,7 +5498,7 @@ function App() {
         h('h1', { className: 'disp wm' }, 'STRATAFLOW'),
         h('div', { className: 'disp', style: { fontSize: 'clamp(16px, 2.4vw, 21px)', color: 'var(--accent)', fontWeight: 500 } }, mod === 'ops' ? L('Tablero operativo de pozos', 'Well operations dashboard') : mod === 'pros' ? L('Prospectividad · Jerarquía de campos y yacimientos', 'Prospectivity · Field and reservoir ranking') : mod === 'fld' ? L('Análisis de campo · Chimire', 'Field analysis · Chimire') : mod === 'pred' ? L('Predictivo · Escenarios Monte Carlo por campo y yacimiento', 'Predictive · Monte Carlo scenarios by field and reservoir') : mod === 'map' ? L('Mapas · Pozos con coordenadas, candidatos y filtros', 'Maps · Wells with coordinates, candidates and filters') : mod === 'pm' ? L('Project Manager · Horas semanales de SAI Group', 'Project Manager · SAI Group weekly hours') : mod === 'pb' ? 'Páginas Blancas · Directorio corporativo y mensajes' : mod === 'time' ? L('Tiempo invertido · Plan Acelerado de Reactivación de Pozos', 'Time invested · Accelerated Well Reactivation Plan') : L('Evaluación económica · Plan Acelerado de Producción 2027', 'Economic evaluation · 2027 Accelerated Production Plan'))),
       h('div', { className: 'flex flex-col items-end gap-2' },
-        h('div', { className: 'flex items-center gap-2', role: 'group', 'aria-label': L('Idioma', 'Language') }, h(Icon, { n: 'globe', s: 18 }),
+        h('div', { className: 'flex items-center gap-2', role: 'group', 'aria-label': L('Idioma', 'Language') }, h(ThemeBtn), h(Icon, { n: 'globe', s: 18 }),
           h('div', { className: 'seg' }, ['EN', 'ES'].map(function (l) { var c = l.toLowerCase(); return h('button', { key: l, type: 'button', className: 'btn', 'aria-pressed': lang === c, onClick: function () { setLang(c); } }, l); }))),
         h('span', { className: 'pill', style: { '--sc': chip[1] } }, h(Icon, { n: 'cloud', s: 13 }), chip[0]))),
     h('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-4' },
