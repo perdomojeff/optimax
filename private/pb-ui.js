@@ -145,7 +145,7 @@
       if (r.error) { setTop(U.errMsg(r.error)); return; }
       p.onSaved(nuevo ? 'Ficha creada.' : 'Ficha actualizada.');
     }
-    var jefes = core.dir.filter(function (x) { return !base || x.id !== base.id; });
+    var jefes = core.dir.filter(function (x) { return (!base || x.id !== base.id) && (x.activo || x.id === f.jefe_id); });
     var inp = function (k, label, o) {
       o = o || {};
       return h(Field, { id: 'pbf-' + k, label: label, req: o.req, err: errs[k], hint: o.hint }, o.area
