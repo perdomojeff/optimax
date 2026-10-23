@@ -55,7 +55,8 @@
   function libCount(hay, term, cap) { var n = 0, i = 0; while (n < cap && (i = hay.indexOf(term, i)) >= 0) { n++; i += term.length; } return n; }
   function libExt(name) { var m = /\.([a-z0-9]+)$/i.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
   function libSize(b) { return b >= 1048576 ? nf(b / 1048576, 1) + ' MB' : nf(Math.max(1, b / 1024), 0) + ' KB'; }
-  var LIB_MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+  var LIB_MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+var LIB_IMG = { png: 1, jpg: 1, jpeg: 1, webp: 1, gif: 1 };
   /* ---- ZIP (lectura mínima de .docx/.xlsx y escritura sin compresión) ---- */
   function libZipList(buf) {
     var dv = new DataView(buf), n = buf.byteLength, i, eocd = -1;
@@ -201,7 +202,7 @@
     var terms = libTerms(q), out = [];
     lib.forEach(function (d) {
       if (tipo && d.tipo !== tipo) return;
-      if (fmt && d.ext !== fmt) return;
+      if (fmt && (fmt === 'img' ? !LIB_IMG[d.ext] : d.ext !== fmt)) return;
       if (!terms.length) { out.push({ d: d, score: 0, hits: 0, nameHit: false }); return; }
       var nm = libFold(d.name), body = (scope !== 'name' && txt && txt[d.id]) ? libFold(txt[d.id]) : '', score = 0, hits = 0, nameHit = false, ok = true;
       for (var i = 0; i < terms.length; i++) {
@@ -301,7 +302,7 @@
       var mark = function (i, st, msg) { cur = cur.map(function (x, k) { return k === i ? { name: x.name, st: st, msg: msg || '' } : x; }); setUps(cur); };
       for (var i = 0; i < files.length; i++) {
         var f = files[i], ext = libExt(f.name);
-        if (['pdf', 'docx', 'xlsx', 'pptx'].indexOf(ext) < 0) { mark(i, 'err', L('Formato no admitido: usa PDF, DOCX, XLSX o PPTX.', 'Unsupported format: use PDF, DOCX, XLSX or PPTX.')); continue; }
+        if (['pdf', 'docx', 'xlsx', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'gif'].indexOf(ext) < 0) { mark(i, 'err', L('Formato no admitido: usa PDF, DOCX, XLSX, PPTX o imagen (PNG, JPG, WEBP, GIF).', 'Unsupported format: use PDF, DOCX, XLSX, PPTX or an image (PNG, JPG, WEBP, GIF).')); continue; }
         if (f.size > LIB_MAX_BYTES) { mark(i, 'err', L('Supera el máximo de 45 MB.', 'Exceeds the 45 MB limit.')); continue; }
         if (lib.some(function (x) { return x.name === f.name && x.size === f.size; })) { mark(i, 'skip', L('Ya está en Documentos.', 'Already in Documents.')); continue; }
         var id = uid();
@@ -317,7 +318,7 @@
           var ok = await p.save('docs', id, meta);
           if (ok && ex.text) await p.save('docstext', id, { text: ex.text });
           if (!ok) mark(i, 'err', L('No se pudo registrar el documento.', 'Could not register the document.'));
-          else mark(i, 'ok', meta.noText ? L('Subido, pero sin texto legible (¿escaneado?): se busca solo por nombre.', 'Uploaded, but no readable text (scanned?): searchable by name only.') : '');
+          else mark(i, 'ok', meta.noText && !LIB_IMG[ext] ? L('Subido, pero sin texto legible (¿escaneado?): se busca solo por nombre.', 'Uploaded, but no readable text (scanned?): searchable by name only.') : '');
         } catch (e) { mark(i, 'err', (e && e.message) || L('Error al subir.', 'Upload error.')); }
       }
     };
@@ -339,19 +340,19 @@
       setSel(function (s) { var n = Object.assign({}, s); delete n[d.id]; return n; });
       if (prevId === d.id) setPrevId(null);
     };
-    var openPrev = function (d) { setPView(d.ext === 'pdf' ? 'orig' : 'text'); setPrevId(d.id); };
+    var openPrev = function (d) { setPView(d.ext === 'pdf' || LIB_IMG[d.ext] ? 'orig' : 'text'); setPrevId(d.id); };
     var pd = prevId ? byId[prevId] : null;
     useEffect(function () {
-      if (!pd || pd.ext !== 'pdf') { setPBlob({ url: '', err: '', busy: false }); return; }
+      if (!pd || (pd.ext !== 'pdf' && !LIB_IMG[pd.ext])) { setPBlob({ url: '', err: '', busy: false }); return; }
       var alive = true, url = '';
       setPBlob({ url: '', err: '', busy: true });
-      LIBST.get(pd).then(function (b) { if (!alive) return; url = URL.createObjectURL(new Blob([b], { type: 'application/pdf' })); setPBlob({ url: url, err: '', busy: false }); })
+      LIBST.get(pd).then(function (b) { if (!alive) return; url = URL.createObjectURL(new Blob([b], { type: LIB_MIME[pd.ext] || 'application/pdf' })); setPBlob({ url: url, err: '', busy: false }); })
         .catch(function (e) { if (alive) setPBlob({ url: '', err: (e && e.message) || 'error', busy: false }); });
       return function () { alive = false; if (url) { try { URL.revokeObjectURL(url); } catch (e) { } } };
     }, [prevId]);
 
     var stColor = { ok: 'var(--good)', err: 'var(--crit)', skip: 'var(--warn)', run: 'var(--info)', wait: 'var(--muted)' };
-    var fmtOpts = [['', L('Todos los formatos', 'All formats')], ['pdf', 'PDF'], ['docx', 'Word (DOCX)'], ['xlsx', 'Excel (XLSX)'], ['pptx', 'PowerPoint (PPTX)']];
+    var fmtOpts = [['', L('Todos los formatos', 'All formats')], ['pdf', 'PDF'], ['docx', 'Word (DOCX)'], ['xlsx', 'Excel (XLSX)'], ['pptx', 'PowerPoint (PPTX)'], ['img', L('Imágenes (PNG, JPG…)', 'Images (PNG, JPG…)')]];
     var tipoOpts = [['', L('Todos los tipos', 'All types')]].concat(docTipos());
 
     var prevPanel = null;
@@ -377,8 +378,9 @@
             h('button', { type: 'button', className: 'btn2', onClick: function () { setPrevId(null); } }, h(Icon, { n: 'x', s: 14 }), L('Cerrar', 'Close'))),
           h('div', { style: { flex: 1, minHeight: 0, overflow: 'auto', padding: pView === 'text' ? 12 : 0, display: 'flex', flexDirection: 'column' } },
             pView === 'orig'
-              ? (pd.ext !== 'pdf' ? h('div', { className: 'hint', style: { padding: 16 } }, L('La vista original solo está disponible para PDF. Usa "Texto" para ver el contenido o descarga el archivo.', 'The original view is only available for PDF. Use "Text" to read the content or download the file.'))
-                : pBlob.url ? h('iframe', { src: pBlob.url, title: pd.name, style: { flex: 1, width: '100%', border: 0, background: '#fff', minHeight: 300 } })
+              ? (pd.ext !== 'pdf' && !LIB_IMG[pd.ext] ? h('div', { className: 'hint', style: { padding: 16 } }, L('La vista original solo está disponible para PDF. Usa "Texto" para ver el contenido o descarga el archivo.', 'The original view is only available for PDF. Use "Text" to read the content or download the file.'))
+                : pBlob.url && LIB_IMG[pd.ext] ? h('div', { style: { flex: 1, minHeight: 300, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, background: 'var(--bg)' } }, h('img', { src: pBlob.url, alt: pd.name, style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' } }))
+              : pBlob.url ? h('iframe', { src: pBlob.url, title: pd.name, style: { flex: 1, width: '100%', border: 0, background: '#fff', minHeight: 300 } })
                 : h('div', { className: 'hint', style: { padding: 16 } }, pBlob.err ? L('No se pudo abrir el PDF: ', 'Could not open the PDF: ') + pBlob.err : L('Cargando PDF…', 'Loading PDF…')))
               : (ptext === undefined ? h('div', { className: 'hint' }, pd.noText ? L('Este documento no tiene texto legible.', 'This document has no readable text.') : L('Cargando texto…', 'Loading text…')) : pageEls)),
           pView === 'orig' && pBlob.url ? h('div', { className: 'hint', style: { padding: '6px 12px', margin: 0, borderTop: '1px solid var(--line)' } }, L('Si tu celular no muestra el PDF aquí, ', 'If your phone does not show the PDF here, '), h('a', { href: pBlob.url, target: '_blank', rel: 'noopener', style: { color: 'var(--accent)' } }, L('ábrelo en una pestaña nueva', 'open it in a new tab')), '.') : null));
@@ -393,8 +395,8 @@
           h('div', { className: 'grid gap-3 items-end', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' } },
             h(SelIn, { id: 'doc-utipo', label: L('Tipo de documento (para los archivos que subas ahora)', 'Document type (for the files you upload now)'), value: uTipo, onChange: setUTipo, options: docTipos() }),
             h('div', null, h('label', { className: 'btn2 prim', style: { cursor: 'pointer', display: 'inline-flex' } }, h(Icon, { n: 'upload', s: 14 }), L('Elegir archivos', 'Choose files'),
-              h('input', { id: 'doc-file', type: 'file', multiple: true, accept: '.pdf,.docx,.xlsx,.pptx', style: { display: 'none' }, onChange: function (e) { var fl = e.target.files; doUpload(fl); try { e.target.value = ''; } catch (er) { } } })))),
-          h('div', { className: 'hint', style: { margin: 0 } }, L('También puedes arrastrar los archivos aquí. Formatos: PDF, Word (.docx), Excel (.xlsx) y PowerPoint (.pptx), hasta 45 MB cada uno. Se lee el texto de cada documento para poder buscar dentro de él.', 'You can also drag files here. Formats: PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx), up to 45 MB each. The text of each document is read so you can search inside it.')))
+              h('input', { id: 'doc-file', type: 'file', multiple: true, accept: '.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.gif', style: { display: 'none' }, onChange: function (e) { var fl = e.target.files; doUpload(fl); try { e.target.value = ''; } catch (er) { } } })))),
+          h('div', { className: 'hint', style: { margin: 0 } }, L('También puedes arrastrar los archivos aquí. Formatos: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx) e imágenes (PNG, JPG, WEBP, GIF), hasta 45 MB cada uno. Se lee el texto de los documentos para poder buscar dentro de ellos; las imágenes se buscan por nombre.', 'You can also drag files here. Formats: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx) and images (PNG, JPG, WEBP, GIF), up to 45 MB each. Document text is read so you can search inside it; images are searched by name.')))
           : h('div', { className: 'hint', style: { margin: 0 } }, L('Tu rol permite buscar, ver y descargar documentos.', 'Your role lets you search, preview and download documents.')),
         ups.length ? h('div', { className: 'flex flex-col gap-1' }, ups.map(function (u, i) { return h('div', { key: i, className: 'hint', style: { margin: 0, color: stColor[u.st] } }, (u.st === 'ok' ? '✔ ' : u.st === 'err' ? '✖ ' : u.st === 'skip' ? '• ' : '… ') + u.name + (u.msg ? ' — ' + u.msg : '')); })) : null),
       h('section', { className: 'panel p-4 flex flex-col gap-3' },
@@ -421,7 +423,7 @@
                 canUp ? h('select', { 'aria-label': L('Tipo de documento', 'Document type'), className: 'in', style: { width: 'auto', padding: '2px 6px', fontSize: 12 }, value: d.tipo || 'otros', onChange: function (e) { p.save('docs', d.id, Object.assign({}, d, { tipo: e.target.value })); } }, docTipos().map(function (t) { return h('option', { key: t[0], value: t[0] }, t[1]); })) : h(Chip, { color: 'var(--info)' }, docTipoName(d.tipo)),
                 h(Chip, null, (d.ext || '').toUpperCase()),
                 r.hits ? h(Chip, { color: 'var(--accent)' }, r.hits + (r.hits >= 99 ? '+' : '') + L(' coincidencias', ' matches')) : null,
-                d.noText ? h(Chip, { color: 'var(--warn)' }, L('sin texto', 'no text')) : null),
+                d.noText && !LIB_IMG[d.ext] ? h(Chip, { color: 'var(--warn)' }, L('sin texto', 'no text')) : null),
               h('div', { className: 'hint', style: { margin: '2px 0 0' } }, libSize(d.size || 0) + (d.pages ? ' · ' + d.pages + L(' pág.', ' pp.') : '') + (d.date ? ' · ' + d.date : '') + (d.by ? ' · ' + d.by : '')),
               sn.map(function (s, i) { return h('div', { key: i, style: { marginTop: 6, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, overflowWrap: 'anywhere' } }, s.paged ? h('span', { className: 'mono', style: { marginRight: 6 } }, L('p. ', 'p. ') + s.page) : null, libHighlight(s.s, terms)); })),
             h('div', { className: 'flex flex-wrap gap-2' },
