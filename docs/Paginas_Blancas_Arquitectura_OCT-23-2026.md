@@ -22,7 +22,7 @@
 
 - Cada cuenta nueva recibe su ficha automáticamente (trigger sobre `profiles`). Se incluyen 14 fichas **ficticias** de ejemplo (`demo = true`, sin cuenta; el administrador puede desactivarlas).
 - Departamentos y sedes son catálogos dinámicos: salen de los valores escritos en las fichas.
-- Conversaciones grupales (fase 2): agregar `pb_conversaciones` y `pb_participantes` y cambiar `para` por `conversacion_id`; la interfaz ya agrupa por conversación.
+- Chats grupales y notificaciones push: ver secciones 5 y 5.1 (`supabase/paginas_blancas_v2.sql`).
 
 ## 3. Supuestos y limitaciones
 
@@ -47,34 +47,41 @@
 
 ## 5. Notificaciones push y aplicación instalable (PWA)
 
-### Estado actual
-- Ya incluido: `manifest.webmanifest`, íconos 192/512/maskable y `sw.js` registrado (instalable en iPhone/iPad con «Añadir a pantalla de inicio» y en Android/escritorio). Avisos dentro de la app, insignia (Badging API) y avisos del navegador con la app abierta o en segundo plano, con vista previa opcional, silenciar chat y «no molestar».
-- El `sw.js` ya contiene los manejadores `push` y `notificationclick` (abre la conversación correcta).
-
-### Pendiente (requiere secretos que solo tú puedes crear)
-El envío con la aplicación **cerrada** necesita Web Push con claves VAPID y un proceso de servidor:
-
+### Cómo funciona
 ```
-Cliente (app instalada) ──suscribe──► tabla pb_push (endpoint, claves, usuario, dispositivo)
-Nuevo mensaje en pb_mensajes ──► Database Webhook (Supabase) ──► /api/push (función serverless, Vercel)
-/api/push ──► servicio push del navegador (FCM / Mozilla / Apple) ──► service worker ──► notificación ──► toque ──► abre el chat
+Cliente (app instalada o pestaña) ──suscribe──► pb_push (endpoint, claves, ajustes del dispositivo)
+Nuevo mensaje en pb_mensajes ──► disparador SQL pb_notificar() ──► función Edge «pb-push» (Supabase)
+pb-push ──► servicio push del navegador (FCM / Mozilla / Apple) ──► service worker (sw.js) ──► notificación ──► toque ──► abre el chat
 ```
+- **Claves VAPID:** la función las genera sola la primera vez y las guarda en `pb_config`, tabla sin acceso para usuarios. Nunca pasan por el código del cliente ni por el repositorio. La clave pública se obtiene con un `GET` a la función.
+- **Autenticación del disparador:** secreto compartido (`pb_config.webhook_secret`, generado en SQL) en el encabezado `x-pb-secret`.
+- **Qué recibe el destinatario:** remitente (y nombre del grupo), vista previa opcional, un aviso por conversación (`tag`) y, al tocarlo, se abre esa conversación. Si el trabajador está mirando la aplicación, el aviso no se duplica.
+- **Ajustes por dispositivo:** vista previa, chats silenciados y «no molestar» se sincronizan con `pb_push` desde el botón «Notificaciones».
+- **Limpieza:** las suscripciones que respondan 404/410 se eliminan solas; cada dispositivo pertenece a quien inició sesión último.
+- **Varios dispositivos** por trabajador; se activan y desactivan en cada uno.
 
-1. Generar claves: `npx web-push generate-vapid-keys` (la clave **privada** no debe salir de los secretos del servidor).
-2. En Vercel → Settings → Environment Variables: `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` (`mailto:…`) y `PUSH_WEBHOOK_SECRET`.
-3. Crear la tabla `pb_push` (con RLS: cada usuario solo ve e inserta sus suscripciones) y el Database Webhook sobre `pb_mensajes` (INSERT) hacia `/api/push` con el secreto en un encabezado.
-4. `/api/push` busca las suscripciones del destinatario, omite dispositivos activos en ese chat, envía con la librería `web-push` y elimina suscripciones que respondan 404/410.
-5. En el cliente: botón «Activar notificaciones» (gesto del usuario) → `pushManager.subscribe({ applicationServerKey })` → guardar la suscripción.
+### Puesta en marcha
+1. Ejecutar `supabase/paginas_blancas_v2.sql` en el editor SQL del proyecto.
+2. Desplegar la función `supabase/functions/pb-push/index.ts` con **Verify JWT desactivado** (Edge Functions → pb-push).
+3. Cada trabajador abre Páginas Blancas → Notificaciones → «Activar notificaciones en este dispositivo».
 
-Esta parte se implementa en la siguiente fase, cuando existan las claves.
+### Limitaciones
+- Ningún navegador garantiza entrega instantánea; el sistema operativo puede retrasar avisos por ahorro de batería. En Android conviene instalar la aplicación y excluir el navegador del ahorro de batería.
+- iPhone/iPad solo reciben push con la app instalada («Añadir a pantalla de inicio») y iOS 16.4 o superior.
+- Si el navegador se cierra por completo en escritorio, el aviso llega solo si el navegador tiene permiso para ejecutarse en segundo plano.
 
 ### Guía de instalación para trabajadores
-- **iPhone/iPad (iOS 16.4 o superior):** abrir StrataFlow en **Safari** → Compartir → «Añadir a pantalla de inicio» → abrir la app desde el ícono → Páginas Blancas → Notificaciones → «Activar notificaciones».
-- **Android (Chrome/Edge/Samsung Internet):** menú ⋮ → «Instalar aplicación» (o «Añadir a pantalla de inicio») → abrir desde el ícono → activar notificaciones.
+- **iPhone/iPad (iOS 16.4 o superior):** abrir StrataFlow en **Safari** → Compartir → «Añadir a pantalla de inicio» → abrir la app desde el ícono → Páginas Blancas → Notificaciones → «Activar notificaciones en este dispositivo».
+- **Android (Chrome/Edge/Samsung Internet):** menú ⋮ → «Instalar aplicación» → abrir desde el ícono → activar notificaciones.
+- **Escritorio:** Páginas Blancas → Notificaciones → activar y permitir cuando el navegador lo pida.
+
+## 5.1 Chats grupales
+- Cualquier trabajador puede crear un grupo (hasta 50 miembros). El creador y administración agregan o quitan miembros y cambian el nombre; cada miembro puede salir.
+- Los mensajes del grupo solo los ven sus miembros (administración puede ver el grupo y sus miembros, no los mensajes). Los adjuntos también quedan limitados a los miembros.
+- Tablas: `pb_grupos`, `pb_grupo_miembros`, `pb_grupo_lecturas` (no leídos por persona).
+- Aviso «está escribiendo…» en chats directos y de grupo, con varios nombres cuando escriben varias personas.
 
 ## 6. Siguientes fases propuestas
-1. Web Push con la aplicación cerrada (sección 5).
-2. Chats grupales por departamento o proyecto.
-3. Estados «visto por» y respuestas a mensajes.
+1. «Visto por» en grupos y respuestas a mensajes específicos.
 4. Sincronización con directorio activo / SSO para crear y desactivar fichas automáticamente.
 5. Notificaciones externas (correo o WhatsApp) para mensajes sin leer.
