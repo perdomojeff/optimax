@@ -933,14 +933,13 @@ function pdfBuild(blocks, opts) {
   add(''); /* pages placeholder */
   var f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   var f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-  var info = add('<< /Title (' + pdfEsc(pdfEnc(opts.title || 'DAEG')) + ') /Producer (DAEG) /Creator (DAEG) >>');
+  var info = add('<< /Title (' + pdfEsc(pdfEnc(opts.title || 'Reporte')) + ') /Producer (Reporte) /Creator (Reporte) >>');
   var kids = [];
   pages.forEach(function (pg, i) {
     var hdr = [];
-    var sec = pg.sec ? pdfEnc(pg.sec) : '', ttl = pdfEnc(opts.title || 'DAEG') + (sec ? '  -  ' + sec : ''), ft = pdfEnc((opts.footer || 'DAEG') + '   |   ' + (sec ? sec + '   |   ' : '') + (opts.pageLabel || 'Page') + ' ' + (i + 1) + ' / ' + N);
+    var sec = pg.sec ? pdfEnc(pg.sec) : '', ttl = pdfEnc(opts.title || 'Reporte') + (sec ? '  -  ' + sec : ''), ft = pdfEnc((opts.footer ? opts.footer + '   |   ' : '') + (sec ? sec + '   |   ' : '') + (opts.pageLabel || 'Page') + ' ' + (i + 1) + ' / ' + N);
     if (opts.top) hdr.push('BT /F2 8.5 Tf 0.3 0.3 0.3 rg ' + M + ' ' + (PH - 20).toFixed(2) + ' Td (' + pdfEsc(pdfEnc(opts.top)) + ') Tj ET');
-    hdr.push('BT /F2 9 Tf 0.85 0.55 0.05 rg ' + M + ' ' + (PH - 34).toFixed(2) + ' Td (DAEG) Tj ET');
-    hdr.push('BT /F1 9 Tf 0.4 0.4 0.4 rg ' + (M + 56) + ' ' + (PH - 34).toFixed(2) + ' Td (' + pdfEsc(ttl) + ') Tj ET');
+    hdr.push('BT /F1 9 Tf 0.4 0.4 0.4 rg ' + M + ' ' + (PH - 34).toFixed(2) + ' Td (' + pdfEsc(ttl) + ') Tj ET');
     hdr.push('0.85 0.55 0.05 RG 1 w ' + M + ' ' + (PH - 42).toFixed(2) + ' m ' + (PW - M) + ' ' + (PH - 42).toFixed(2) + ' l S');
     hdr.push('BT /F1 8 Tf 0.45 0.45 0.45 rg ' + M + ' 30 Td (' + pdfEsc(ft) + ') Tj ET');
     var content = hdr.join('\n') + '\n' + pg.join('\n');
@@ -971,7 +970,7 @@ function usd(n) { return (n < 0 ? '−' : '') + '$' + nf(Math.abs(n)); }
 function uid() { return 'x' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
 function today() { return new Date().toISOString().slice(0, 10); }
 function fdate() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + d.getFullYear(); }
-function rptFooter() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return 'DAEG · ' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + d.getFullYear() + ' · Houston, Tx · ' + L('Dirección Acelerada de Estudios Geocientíficos', 'Accelerated Geoscience Studies Directorate'); }
+function rptFooter() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + d.getFullYear() + ' · Houston, Tx'; }
 function fl(f) { return LANG === 'es' ? f.es : f.en; }
 function it(i) { return LANG === 'es' ? i.es : i.en; }
 function bname(k) { return BASKETS[k][LANG]; }
@@ -1356,7 +1355,7 @@ async function exportBasket(entries, key) {
     await saveFile(name + '.csv', csv);
     return 'csv';
   }
-  var wb = new X.Workbook(); wb.creator = 'DAEG'; wb.created = new Date();
+  var wb = new X.Workbook(); wb.creator = ''; wb.created = new Date();
   var ws = wb.addWorksheet(bname(key).slice(0, 31), { views: [{ state: 'frozen', ySplit: 1 }] });
   ws.addRow(hdr); styleHeader(ws.getRow(1));
   rows.forEach(function (r) { var row = ws.addRow(r); row.eachCell(function (c) { c.alignment = { vertical: 'top', wrapText: true }; }); });
@@ -1426,7 +1425,7 @@ async function readWorkbookFile(file) {
 /* ---------- Excel import template ---------- */
 async function exportTemplate() {
   var X = await loadExcel();
-  var wb = new X.Workbook(); wb.creator = 'DAEG'; wb.created = new Date();
+  var wb = new X.Workbook(); wb.creator = ''; wb.created = new Date();
   var es = LANG === 'es', ix = es ? 1 : 2, MAXR = 1000;
   var info = wb.addWorksheet(es ? 'LEEME' : 'READ ME', { views: [{ showGridLines: false }] });
   info.getColumn(1).width = 30; info.getColumn(2).width = 100;
@@ -1499,7 +1498,7 @@ async function exportFicha(e) {
   var w = e.w, k = e.k, a = e.a;
   var name = 'Ficha_' + w.name.replace(/[^A-Za-z0-9_-]+/g, '_') + '_' + fdate();
   var X = await loadExcel();
-  var wb = new X.Workbook(); wb.creator = 'DAEG'; wb.created = new Date();
+  var wb = new X.Workbook(); wb.creator = ''; wb.created = new Date();
   var ws = wb.addWorksheet(L('Ficha', 'Well file'), { views: [{ showGridLines: false }] });
   [22, 18, 18, 18, 18, 18, 18, 18].forEach(function (wd, i) { ws.getColumn(i + 1).width = wd; });
   var r = 1;
@@ -2346,7 +2345,7 @@ function ProsLibTab(p) {
   var fieldOpts = [['', L('Todos los campos', 'All fields')]].concat(PROS.fields.map(function (x, i) { return [String(i), x]; }).sort(function (a, b) { return a[1] < b[1] ? -1 : 1; }));
   var kpi = function (lab, val, unit, hint) { return h('div', { className: 'panel p-3', style: { minWidth: 0 } }, h('div', { className: 'eyebrow' }, lab), h('div', { className: 'flex items-baseline gap-1.5 mt-1', style: { flexWrap: 'wrap' } }, h('span', { className: 'kpi' }, val), h('span', { className: 'unit' }, unit)), h('div', { className: 'hint', style: { marginTop: 2 } }, hint)); };
   var th = function (key, lab, right) { return h('th', { key: key, style: { textAlign: right ? 'right' : 'left' } }, key ? h('button', { type: 'button', className: 'lnk', style: { textTransform: 'inherit', letterSpacing: 'inherit', fontWeight: sk === key ? 700 : 500, color: sk === key ? 'var(--accent)' : 'inherit' }, onClick: function () { setSk(key); }, 'aria-label': L('Ordenar por ', 'Sort by ') + lab }, lab + (sk === key ? ' ▾' : '')) : lab); };
-  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(prosPdfAll(ctx, lg), { title: lg === 'es' ? 'Prospectividad · Libro de Reservas 2009 PDVSA Gas Oriente' : 'Prospectivity · 2009 Reserves Book PDVSA Gas Eastern', top: L('Dirección Acelerada de Estudios Geocientíficos', 'Accelerated Geoscience Studies Directorate'), footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Prospectividad_' + lg.toUpperCase() + '_' + fdate() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar (resumen ejecutivo y análisis extendido).' : 'English PDF ready to download (executive summary and extended analysis).'); setBusy(''); };
+  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(prosPdfAll(ctx, lg), { title: lg === 'es' ? 'Prospectividad · Libro de Reservas 2009 PDVSA Gas Oriente' : 'Prospectivity · 2009 Reserves Book PDVSA Gas Eastern', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Prospectividad_' + lg.toUpperCase() + '_' + fdate() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar (resumen ejecutivo y análisis extendido).' : 'English PDF ready to download (executive summary and extended analysis).'); setBusy(''); };
   var doXlsx = async function () { setBusy('x'); await p.runExport(function () { return exportProsXlsx(ctx); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
   var drill = function (e) { setF(Object.assign({}, f, { field: String(e.fi) })); setLevel('res'); setSk('idx'); };
   var sw = 0; PMET.forEach(function (mm) { sw += Math.max(0, +w[mm[0]] || 0); });
@@ -2944,7 +2943,7 @@ function ProsTab(p) {
   var exec = useMemo(function () { return cpExec(m); }, [m, LANG]);
   var sumScene = useMemo(function () { return cpSumScene(m); }, [m, LANG]);
   var ctx = { m: m, lib: lib };
-  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG, u8; LANG = lg; try { u8 = pdfBuild(cpPdfAll(ctx, lg), { title: lg === 'es' ? 'Jerarquización de campos y yacimientos · Occidente y Oriente de Venezuela' : 'Candidate field and reservoir ranking · Western and Eastern Venezuela', top: L('Dirección Acelerada de Estudios Geocientíficos', 'Accelerated Geoscience Studies Directorate'), footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Ranking_CPP_' + lg.toUpperCase() + '_' + fdate() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.'); setBusy(''); };
+  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG, u8; LANG = lg; try { u8 = pdfBuild(cpPdfAll(ctx, lg), { title: lg === 'es' ? 'Jerarquización de campos y yacimientos · Occidente y Oriente de Venezuela' : 'Candidate field and reservoir ranking · Western and Eastern Venezuela', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Ranking_CPP_' + lg.toUpperCase() + '_' + fdate() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.'); setBusy(''); };
   var doXlsx = async function () { setBusy('x'); await p.runExport(function () { return exportCppXlsx(ctx); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
   return h('div', { className: 'flex flex-col gap-4' },
     h('section', { className: 'panel p-4 flex flex-col gap-3' },
@@ -3361,7 +3360,7 @@ function FieldTab(p) {
   var chart = function (k, label) { return scn[k] ? h('div', { className: 'panel p-3', style: { minWidth: 0 } }, h(SceneSvg, { scene: scn[k], label: label })) : null; };
   var tbl = function (heads, rows, right) { return h('div', { className: 'scroll-x' }, h('table', { className: 'tbl' }, h('thead', null, h('tr', null, heads.map(function (x, i) { return h('th', { key: i, style: { textAlign: right && right.indexOf(i) >= 0 ? 'right' : 'left' } }, x); }))), h('tbody', null, rows.map(function (r, i) { return h('tr', { key: i }, r.map(function (v, j) { return h('td', { key: j, className: right && right.indexOf(j) >= 0 ? 'mono' : '', style: { whiteSpace: 'normal', verticalAlign: 'top', textAlign: right && right.indexOf(j) >= 0 ? 'right' : 'left' } }, v); })); })))); };
   var sec = function (title, body, det) { return det ? h('section', { className: 'panel p-4' }, h('details', null, h('summary', { className: 'lnk', style: { cursor: 'pointer' } }, title), h('div', { style: { marginTop: 8 } }, body))) : h('section', { className: 'panel p-4' }, h('div', { className: 'eyebrow mb-2' }, title), body); };
-  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(fcPdfAll(c, ranked, w, lg), { title: lg === 'es' ? 'Campo Chimire · Análisis estratégico' : 'Chimire Field · Strategic analysis', top: L('Dirección Acelerada de Estudios Geocientíficos', 'Accelerated Geoscience Studies Directorate'), footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Campo_Chimire_' + lg.toUpperCase() + '_' + fdate() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.'); setBusy(''); };
+  var doPdf = async function (lg) { setBusy('p'); await p.runExport(function () { var prevL = LANG; LANG = lg; try { var u8 = pdfBuild(fcPdfAll(c, ranked, w, lg), { title: lg === 'es' ? 'Campo Chimire · Análisis estratégico' : 'Chimire Field · Strategic analysis', footer: rptFooter(), pageLabel: lg === 'es' ? 'Página' : 'Page' }); } finally { LANG = prevL; } return saveFile('Campo_Chimire_' + lg.toUpperCase() + '_' + fdate() + '.pdf', new Blob([u8], { type: 'application/pdf' })); }, lg === 'es' ? 'PDF en español listo para descargar.' : 'English PDF ready to download.'); setBusy(''); };
   var doXlsx = async function () { setBusy('x'); await p.runExport(function () { return exportFcXlsx(c, ranked, w); }, L('Excel listo para descargar.', 'Excel ready to download.')); setBusy(''); };
   var sw = 0; FC_CRIT.forEach(function (k) { sw += Math.max(0, +w[k[0]] || 0); });
   var setRate = function (id, k, v) { var n = Object.assign({}, S); n[id] = Object.assign({}, n[id]); n[id][k] = +v; setS(n); };
@@ -4093,7 +4092,7 @@ function predFmtPb(m) { return m === null ? L('> 10 años', '> 10 yrs') : (m <= 
 async function predExport(S, rowsFor) {
   var X = null; try { X = await loadExcel(); } catch (e) { X = null; }
   if (!X) throw new Error('exceljs');
-  var P = S.P, wb = new X.Workbook(); wb.creator = 'DAEG'; wb.created = new Date();
+  var P = S.P, wb = new X.Workbook(); wb.creator = ''; wb.created = new Date();
   var hz = PRED_HZ, hdr = [L('Campo', 'Field'), L('Yacimiento', 'Reservoir'), L('Pozos', 'Wells'), L('Inversión media (MM$)', 'Mean investment (MM$)'), L('Qi esperada (Mbopd)', 'Expected Qi (Mbopd)'), L('Horizonte', 'Horizon'), 'VPN P90 (MM$)', 'VPN P50 (MM$)', 'VPN P10 (MM$)', 'VPN ' + L('medio', 'mean') + ' (MM$)', 'P(VPN>0)', 'Np P50 (Mbbl)', 'VPN/I P50', L('TIR P90 (anual)', 'IRR P90 (annual)'), L('TIR P50 (anual)', 'IRR P50 (annual)'), L('TIR P10 (anual)', 'IRR P10 (annual)')];
   var addTbl = function (name, nodes) {
     var ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] }); ws.addRow(hdr); styleHeader(ws.getRow(1));
@@ -5287,7 +5286,7 @@ function Econ(p) {
     setBusyPdf(true);
     var tag = [fFld ? (p.fieldById[fFld] || {}).name : '', fRes ? ((p.reservoirs || []).filter(function (r) { return r.id === fRes; })[0] || {}).name : '', fCat ? 'Cat' + fCat : '', selEntry ? selEntry.w.name : ''].filter(Boolean).join('_').replace(/[^A-Za-z0-9_\-]+/g, '') || 'General';
     var fn = 'Recomendaciones_' + tag + '_' + fdate() + '.pdf';
-    await p.runExport(function () { var u8 = pdfBuild(buildPdf(), { title: L('Recomendación del Consultor Senior', 'Senior Consultant Recommendation'), footer: 'DAEG', pageLabel: L('Página', 'Page') }); return saveFile(fn, new Blob([u8], { type: 'application/pdf' })); }, L('PDF listo para descargar.', 'PDF ready to download.'));
+    await p.runExport(function () { var u8 = pdfBuild(buildPdf(), { title: L('Recomendación del Consultor Senior', 'Senior Consultant Recommendation'), footer: '', pageLabel: L('Página', 'Page') }); return saveFile(fn, new Blob([u8], { type: 'application/pdf' })); }, L('PDF listo para descargar.', 'PDF ready to download.'));
     setBusyPdf(false);
   };
   var filterBar = h('section', { className: 'panel p-4 flex flex-wrap items-end gap-4' },
