@@ -72,17 +72,20 @@
       list.length > shown ? h('div', { style: { textAlign: 'center', marginTop: 12 } }, h('button', { type: 'button', className: 'pb-b', onClick: function () { setShown(shown + U.PAGE * 2); } }, 'Ver más (' + (list.length - shown) + ' restantes)')) : null);
   }
 
-  /* ---------- organigrama ---------- */
+  /* ---------- organigrama (árbol horizontal) ---------- */
   function OrgChart(p) {
     var act = core.dir.filter(function (f) { return f.activo; }), ids = {}; act.forEach(function (f) { ids[f.id] = 1; });
     var kids = {}; act.forEach(function (f) { var k = f.jefe_id && ids[f.jefe_id] ? f.jefe_id : '_root'; (kids[k] = kids[k] || []).push(f); });
-    function node(f, d) {
-      var ch = d < 8 ? (kids[f.id] || []) : [];
-      return h('li', { key: f.id }, h('button', { type: 'button', className: 'pb-b', onClick: function () { p.onOpen(f); } }, h(Avatar, { f: f, size: 26 }), h('span', null, full(f)), h('span', { className: 'pb-sub' }, f.cargo || '')), ch.length ? h('ul', null, ch.map(function (c) { return node(c, d + 1); })) : null);
+    function card(f) {
+      return h('button', { key: f.id, type: 'button', className: 'pb-ocard', onClick: function () { p.onOpen(f); }, 'aria-label': 'Abrir ficha de ' + full(f) },
+        h(Avatar, { f: f, size: 40, estado: core.estado(f) }), h('span', { className: 'pb-nm pb-ell', style: { fontSize: 13 } }, full(f)), h('span', { className: 'pb-sub pb-ell', style: { fontSize: 11.5 } }, f.cargo || ''));
     }
-    var roots = kids._root || [];
-    if (!roots.length) return h('div', { className: 'pb-empty pb-panel' }, 'Aún no hay jerarquía registrada. Asigna un jefe directo en las fichas.');
-    return h('div', { className: 'pb-panel pb-org', style: { padding: 14 } }, h('ul', null, roots.map(function (r) { return node(r, 0); })));
+    function node(f, d) { var ch = d < 8 ? (kids[f.id] || []) : []; return h('li', { key: f.id }, card(f), ch.length ? h('ul', null, ch.map(function (c) { return node(c, d + 1); })) : null); }
+    var roots = kids._root || [], trees = roots.filter(function (r) { return (kids[r.id] || []).length; }), solos = roots.filter(function (r) { return !(kids[r.id] || []).length; });
+    if (!act.length) return h('div', { className: 'pb-empty pb-panel' }, 'Aún no hay trabajadores registrados.');
+    return h('div', { className: 'pb-panel', style: { padding: 14 } },
+      trees.length ? h('div', { className: 'pb-treewrap' }, h('div', { className: 'pb-tree' }, h('ul', null, trees.map(function (r) { return node(r, 0); })))) : h('p', { className: 'pb-hint' }, 'Aún no hay jerarquía registrada. Asigna un jefe directo en las fichas para formar el organigrama.'),
+      solos.length ? h('div', { style: { marginTop: trees.length ? 16 : 0 } }, h('div', { className: 'pb-lbl' }, 'Sin supervisor ni supervisados asignados (' + solos.length + ')'), h('div', { className: 'pb-solos' }, solos.map(card))) : null);
   }
 
   /* ---------- importación / exportación ---------- */
@@ -145,23 +148,29 @@
 
   /* ---------- ajustes de notificaciones ---------- */
   function Settings(p) {
-    var s = useState(U.cfgGet()), c = s[0], setC = s[1], s2 = useState(window.Notification ? Notification.permission : 'unsupported'), perm = s2[0], setPerm = s2[1];
-    function upd(k, v) { var n = Object.assign({}, c); n[k] = v; setC(n); U.cfgSet(n); }
+    var s = useState(U.cfgGet()), c = s[0], setC = s[1], s2 = useState('...'), pst = s2[0], setPst = s2[1], s3 = useState(''), perr = s3[0], setPerr = s3[1], s4 = useState(false), busy = s4[0], setBusy = s4[1];
+    function refresh() { core.pushStatus().then(setPst); }
+    useEffect(refresh, []);
+    function upd(k, v) { var n = Object.assign({}, c); n[k] = v; setC(n); U.cfgSet(n); if (pst === 'on') core.pushEnsure(); }
     var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     var standalone = window.matchMedia && matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-    function ask() { Notification.requestPermission().then(function (r) { setPerm(r); }); }
+    function enable() { setBusy(true); setPerr(''); core.pushEnable().then(refresh, function (e) { setPerr(U.errMsg(e)); refresh(); }).then(function () { setBusy(false); }); }
+    function disable() { setBusy(true); setPerr(''); core.pushDisable().then(refresh, function (e) { setPerr(U.errMsg(e)); }).then(function () { setBusy(false); }); }
     return h(Modal, { title: 'Notificaciones', onClose: p.onClose },
-      h('p', { style: { marginTop: 0 } }, 'Recibes un aviso dentro de StrataFlow cada vez que llega un mensaje. También puedes activar avisos del navegador mientras la aplicación esté abierta en segundo plano.'),
-      perm === 'unsupported' ? h('p', { className: 'pb-hint' }, 'Este navegador no admite notificaciones; seguirás viendo los avisos y la insignia dentro de la aplicación.')
-        : perm === 'granted' ? h('p', { style: { color: 'var(--pb-good)' } }, '✓ Avisos del navegador activados en este dispositivo.')
-          : perm === 'denied' ? h('p', { className: 'pb-err' }, 'Los avisos están bloqueados. Habilítalos en la configuración del sitio de tu navegador.')
-            : h('button', { type: 'button', className: 'pb-b prim', onClick: ask }, h(Ico, { n: 'bell', s: 14 }), 'Activar notificaciones'),
-      ios && !standalone ? h('p', { className: 'pb-hint' }, 'En iPhone/iPad (iOS 16.4 o superior): abre StrataFlow en Safari, toca Compartir → «Añadir a pantalla de inicio» y abre la app desde ese ícono antes de activar las notificaciones.') : null,
-      h('label', { className: 'pb-sw', style: { margin: '10px 0' } }, h('input', { type: 'checkbox', checked: c.preview, onChange: function (e) { upd('preview', e.target.checked); } }), 'Mostrar vista previa del mensaje en los avisos'),
+      h('p', { style: { marginTop: 0 } }, 'Recibes un aviso dentro de StrataFlow cada vez que llega un mensaje. Activa las notificaciones del dispositivo para recibirlas también con la aplicación cerrada o el teléfono bloqueado.'),
+      pst === '...' ? h('p', { className: 'pb-hint' }, 'Comprobando…')
+        : pst === 'unsupported' ? h('p', { className: 'pb-hint' }, 'Este navegador no admite notificaciones del dispositivo; seguirás viendo los avisos y la insignia dentro de la aplicación.' + (ios && !standalone ? ' En iPhone/iPad primero instala la aplicación (abajo).' : ''))
+          : pst === 'denied' ? h('p', { className: 'pb-err' }, 'Las notificaciones están bloqueadas para este sitio. Habilítalas en la configuración del sitio del navegador y vuelve aquí.')
+            : pst === 'on' ? h('div', null, h('p', { style: { color: 'var(--pb-good)', margin: '0 0 8px' } }, '✓ Notificaciones activas en este dispositivo, incluso con la aplicación cerrada.'), h('button', { type: 'button', className: 'pb-b', disabled: busy, onClick: disable }, 'Desactivar en este dispositivo'))
+              : h('button', { type: 'button', className: 'pb-b prim', disabled: busy, onClick: enable }, h(Ico, { n: 'bell', s: 14 }), busy ? 'Activando…' : 'Activar notificaciones en este dispositivo'),
+      perr ? h('div', { className: 'pb-err', role: 'alert' }, perr) : null,
+      ios && !standalone ? h('p', { className: 'pb-hint' }, 'iPhone/iPad (iOS 16.4 o superior): abre StrataFlow en Safari, toca Compartir → «Añadir a pantalla de inicio» y abre la app desde ese ícono antes de activar las notificaciones.') : null,
+      /Android/i.test(navigator.userAgent) ? h('p', { className: 'pb-hint' }, 'Android: si los avisos tardan o no llegan, instala la aplicación («Instalar aplicación» en el menú del navegador) y excluye el navegador del ahorro de batería en la configuración del teléfono.') : null,
+      h('label', { className: 'pb-sw', style: { margin: '14px 0 10px' } }, h('input', { type: 'checkbox', checked: c.preview, onChange: function (e) { upd('preview', e.target.checked); } }), 'Mostrar vista previa del mensaje en los avisos'),
       h('label', { className: 'pb-sw', style: { margin: '10px 0' } }, h('input', { type: 'checkbox', checked: c.dnd, onChange: function (e) { upd('dnd', e.target.checked); } }), 'No molestar en este horario'),
       c.dnd ? h('div', { className: 'pb-g2' }, h(Field, { id: 'pbd1', label: 'Desde' }, h('input', { id: 'pbd1', type: 'time', className: 'pb-in', value: c.from, onChange: function (e) { upd('from', e.target.value); } })), h(Field, { id: 'pbd2', label: 'Hasta' }, h('input', { id: 'pbd2', type: 'time', className: 'pb-in', value: c.to, onChange: function (e) { upd('to', e.target.value); } }))) : null,
-      Object.keys(c.muted).filter(function (k) { return c.muted[k]; }).length ? h('div', null, h('div', { className: 'pb-lbl', style: { marginTop: 10 } }, 'Chats silenciados'), Object.keys(c.muted).filter(function (k) { return c.muted[k]; }).map(function (k) { var f = core.byUser(k); return h('button', { key: k, type: 'button', className: 'pb-b', style: { margin: '0 6px 6px 0' }, onClick: function () { var m = Object.assign({}, c.muted); delete m[k]; upd('muted', m); } }, (f ? full(f) : 'Usuario') + ' ✕'); })) : null,
-      h('p', { className: 'pb-hint' }, 'Estos ajustes se guardan en este dispositivo. Las notificaciones con la aplicación completamente cerrada requieren la configuración de Web Push descrita en la documentación del módulo.'));
+      Object.keys(c.muted).filter(function (k) { return c.muted[k]; }).length ? h('div', null, h('div', { className: 'pb-lbl', style: { marginTop: 10 } }, 'Chats silenciados'), Object.keys(c.muted).filter(function (k) { return c.muted[k]; }).map(function (k) { var f = core.byUser(k), g = core.groupById(k); return h('button', { key: k, type: 'button', className: 'pb-b', style: { margin: '0 6px 6px 0' }, onClick: function () { var m = Object.assign({}, c.muted); delete m[k]; upd('muted', m); } }, (f ? full(f) : g ? g.nombre : 'Chat') + ' ✕'); })) : null,
+      h('p', { className: 'pb-hint' }, 'Estos ajustes se guardan en este dispositivo. Ningún navegador garantiza entrega instantánea: el sistema operativo puede retrasar avisos para ahorrar batería.'));
   }
 
   /* ---------- chat ---------- */
@@ -186,19 +195,85 @@
     var st = m.leido_en ? 'Leído' : m.entregado_en ? 'Entregado' : 'Enviado';
     return h('span', { title: st, 'aria-label': st, style: { color: m.leido_en ? '#1a5fb4' : 'inherit', marginLeft: 4 } }, m.entregado_en || m.leido_en ? '✓✓' : '✓');
   }
+  function GAvatar(p) { var g = p.g, sz = p.size || 40; return h('span', { className: 'pb-av pb-gav', style: { width: sz, height: sz, fontSize: Math.round(sz * 0.4) }, 'aria-hidden': true }, (g.nombre || 'G').trim().slice(0, 2).toUpperCase()); }
+  function typingText(map) {
+    var now = Date.now(), ids = Object.keys(map).filter(function (k) { return map[k] > now; });
+    if (!ids.length) return '';
+    var nm = ids.map(function (k) { var f = core.byUser(k); return f ? (ids.length === 1 ? full(f) : f.nombres) : 'Alguien'; });
+    if (nm.length === 1) return nm[0] + ' está escribiendo…';
+    if (nm.length === 2) return nm[0] + ' y ' + nm[1] + ' están escribiendo…';
+    if (nm.length === 3) return nm[0] + ', ' + nm[1] + ' y ' + nm[2] + ' están escribiendo…';
+    return 'Varias personas están escribiendo…';
+  }
+  function useTypingMap(map) {   /* reevalúa cada segundo mientras alguien escribe para que el aviso expire solo */
+    var s = useState(0), set = s[1];
+    useEffect(function () { var any = Object.keys(map).some(function (k) { return map[k] > Date.now(); }); if (!any) return; var t = setTimeout(function () { set(function (x) { return x + 1; }); }, 1000); return function () { clearTimeout(t); }; });
+  }
+
+  /* ---------- miembros de un grupo ---------- */
+  function Members(p) {
+    var g = p.g, me = U.meId(), s1 = useState(''), err = s1[0], setErr = s1[1], s2 = useState(''), add = s2[0], setAdd = s2[1], s3 = useState(g.nombre), name = s3[0], setName = s3[1];
+    var mem = (core.members[g.id] || []), canAdm = g.creado_por === me || U.isAdm();
+    var cand = core.dir.filter(function (f) { return f.user_id && f.activo && mem.indexOf(f.user_id) < 0; });
+    async function doAdd() { if (!add) return; setErr(''); var r = await sb().from('pb_grupo_miembros').insert({ grupo_id: g.id, user_id: add }); if (r.error) setErr(U.errMsg(r.error)); else { setAdd(''); core.loadGroups(); } }
+    async function doDel(uid) { setErr(''); var r = await sb().from('pb_grupo_miembros').delete().eq('grupo_id', g.id).eq('user_id', uid); if (r.error) setErr(U.errMsg(r.error)); else { if (uid === me) p.onLeft(); core.loadGroups(); } }
+    async function rename() { var n = name.trim(); if (!n || n === g.nombre) return; var r = await sb().from('pb_grupos').update({ nombre: n.slice(0, 60) }).eq('id', g.id); if (r.error) setErr(U.errMsg(r.error)); else core.loadGroups(); }
+    return h(Modal, { title: 'Grupo: ' + g.nombre, onClose: p.onClose },
+      canAdm ? h('div', { style: { display: 'flex', gap: 8, marginBottom: 12 } }, h('input', { className: 'pb-in', value: name, maxLength: 60, 'aria-label': 'Nombre del grupo', onChange: function (e) { setName(e.target.value); } }), h('button', { type: 'button', className: 'pb-b', onClick: rename }, 'Renombrar')) : null,
+      h('div', { className: 'pb-lbl' }, mem.length + ' miembros'),
+      h('div', { style: { maxHeight: 260, overflow: 'auto', marginBottom: 10 } }, mem.map(function (uid) {
+        var f = core.byUser(uid);
+        return h('div', { key: uid, style: { display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--pb-line)' } },
+          f ? h(Avatar, { f: f, size: 32, estado: core.estado(f) }) : null, h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { className: 'pb-nm pb-ell' }, f ? full(f) : 'Usuario', uid === g.creado_por ? h('span', { className: 'pb-chip', style: { marginLeft: 6 } }, 'Creador') : null, uid === me ? h('span', { className: 'pb-chip', style: { marginLeft: 6 } }, 'Tú') : null)),
+          (canAdm && uid !== g.creado_por && uid !== me) ? h('button', { type: 'button', className: 'pb-b', style: { padding: '2px 8px' }, onClick: function () { doDel(uid); }, 'aria-label': 'Quitar del grupo' }, 'Quitar') : null);
+      })),
+      canAdm ? h('div', { style: { display: 'flex', gap: 8 } }, h('select', { className: 'pb-in', 'aria-label': 'Agregar miembro', value: add, onChange: function (e) { setAdd(e.target.value); } }, h('option', { value: '' }, '+ Agregar miembro…'), cand.map(function (f) { return h('option', { key: f.user_id, value: f.user_id }, full(f)); })), h('button', { type: 'button', className: 'pb-b prim', disabled: !add, onClick: doAdd }, 'Agregar')) : null,
+      err ? h('div', { className: 'pb-err', role: 'alert' }, err) : null,
+      h('div', { style: { marginTop: 14 } }, h('button', { type: 'button', className: 'pb-b crit', onClick: function () { doDel(me); } }, 'Salir del grupo')));
+  }
+  function NewGroup(p) {
+    var me = U.meId(), s1 = useState(''), name = s1[0], setName = s1[1], s2 = useState({}), sel = s2[0], setSel = s2[1], s3 = useState(''), q = s3[0], setQ = s3[1], s4 = useState(''), err = s4[0], setErr = s4[1], s5 = useState(false), busy = s5[0], setBusy = s5[1];
+    var cand = core.dir.filter(function (f) { return f.user_id && f.user_id !== me && f.activo && (!q || U.norm(full(f) + ' ' + f.cargo + ' ' + f.departamento).indexOf(U.norm(q)) >= 0); });
+    var chosen = Object.keys(sel).filter(function (k) { return sel[k]; });
+    async function create() {
+      var n = name.trim(); if (!n) return setErr('Escribe un nombre para el grupo.'); if (!chosen.length) return setErr('Elige al menos un miembro.');
+      setBusy(true); setErr('');
+      var r = await sb().from('pb_grupos').insert({ nombre: n.slice(0, 60), creado_por: me }).select().single();
+      if (r.error) { setBusy(false); return setErr(U.errMsg(r.error)); }
+      var m = await sb().from('pb_grupo_miembros').insert(chosen.map(function (u) { return { grupo_id: r.data.id, user_id: u }; }));
+      await core.loadGroups(); setBusy(false);
+      if (m.error) setErr('El grupo se creó, pero no se pudieron agregar todos: ' + U.errMsg(m.error)); p.onCreated(r.data.id);
+    }
+    return h(Modal, { title: 'Nuevo grupo', onClose: p.onClose },
+      h(Field, { id: 'pbg-n', label: 'Nombre del grupo', req: true }, h('input', { id: 'pbg-n', className: 'pb-in', maxLength: 60, value: name, onChange: function (e) { setName(e.target.value); }, placeholder: 'Ej.: Equipo de producción' })),
+      h('div', { style: { marginTop: 10 } }, h(Field, { id: 'pbg-q', label: 'Miembros (' + chosen.length + ' elegidos)' }, h('input', { id: 'pbg-q', type: 'search', className: 'pb-in', placeholder: 'Buscar por nombre, cargo o departamento…', value: q, onChange: function (e) { setQ(e.target.value); } }))),
+      h('div', { style: { maxHeight: 260, overflow: 'auto', margin: '8px 0', border: '1px solid var(--pb-line)', borderRadius: 8 } },
+        !cand.length ? h('div', { className: 'pb-empty', style: { padding: 16 } }, 'Sin trabajadores con cuenta que coincidan.') : cand.map(function (f) {
+          return h('label', { key: f.user_id, className: 'pb-sw', style: { padding: '7px 10px', borderBottom: '1px solid var(--pb-line)' } }, h('input', { type: 'checkbox', checked: !!sel[f.user_id], onChange: function (e) { var n = Object.assign({}, sel); n[f.user_id] = e.target.checked; setSel(n); } }), h(Avatar, { f: f, size: 28 }), h('span', null, full(f), h('span', { className: 'pb-sub' }, f.cargo ? ' · ' + f.cargo : '')));
+        })),
+      err ? h('div', { className: 'pb-err', role: 'alert' }, err) : null,
+      h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 } }, h('button', { type: 'button', className: 'pb-b', onClick: p.onClose }, 'Cancelar'), h('button', { type: 'button', className: 'pb-b prim', disabled: busy, onClick: create }, busy ? 'Creando…' : 'Crear grupo')));
+  }
+
+  /* ---------- conversación (directa o de grupo) ---------- */
   function Thread(p) {
-    var peer = p.peer, f = core.byUser(peer), me = U.meId();
-    var s1 = useState(''), txt = s1[0], setTxt = s1[1], s2 = useState(false), busy = s2[0], setBusy = s2[1], s3 = useState(''), err = s3[0], setErr = s3[1], s4 = useState(false), typing = s4[0], setTyping = s4[1], s5 = useState(null), file = s5[0], setFile = s5[1];
+    var isG = p.sel.t === 'g', id = p.sel.id, me = U.meId(), f = isG ? null : core.byUser(id), g = isG ? core.groupById(id) : null;
+    var s1 = useState(''), txt = s1[0], setTxt = s1[1], s2 = useState(false), busy = s2[0], setBusy = s2[1], s3 = useState(''), err = s3[0], setErr = s3[1], s4 = useState({}), typing = s4[0], setTyping = s4[1], s5 = useState(null), file = s5[0], setFile = s5[1], s6 = useState(false), showMem = s6[0], setShowMem = s6[1];
     var end = useRef(null), chRef = useRef(null), lastT = useRef(0), fileIn = useRef(null);
-    var msgs = core.msgs.filter(function (m) { return (m.de === me && m.para === peer) || (m.de === peer && m.para === me); });
-    useEffect(function () { core.markRead(peer); }, [peer, msgs.length, document.hidden]);
-    useEffect(function () { if (end.current) end.current.scrollTop = end.current.scrollHeight; }, [msgs.length, typing, peer]);
+    useTypingMap(typing);
+    var msgs = core.msgs.filter(function (m) { return isG ? m.grupo_id === id : (!m.grupo_id && ((m.de === me && m.para === id) || (m.de === id && m.para === me))); });
+    useEffect(function () { if (isG) core.markReadGroup(id); else core.markRead(id); }, [id, msgs.length, document.hidden]);
+    var tt = typingText(typing);
+    useEffect(function () { if (end.current) end.current.scrollTop = end.current.scrollHeight; }, [msgs.length, tt, id]);
     useEffect(function () {
-      var name = 'pb-t-' + [me, peer].sort().join('-'), tm = null;
-      var ch = sb().channel(name).on('broadcast', { event: 'typing' }, function (e) { if (e.payload && e.payload.from === peer) { setTyping(true); clearTimeout(tm); tm = setTimeout(function () { setTyping(false); }, 3000); } }).subscribe();
-      chRef.current = ch; setTyping(false);
-      return function () { clearTimeout(tm); try { sb().removeChannel(ch); } catch (e) { } };
-    }, [peer]);
+      var name = isG ? 'pb-tg-' + id : 'pb-t-' + [me, id].sort().join('-');
+      var ch = sb().channel(name).on('broadcast', { event: 'typing' }, function (e) {
+        var from = e.payload && e.payload.from; if (!from || from === me) return;
+        setTyping(function (o) { var n = Object.assign({}, o); n[from] = Date.now() + 3500; return n; });
+      }).subscribe();
+      chRef.current = ch; setTyping({});
+      return function () { try { sb().removeChannel(ch); } catch (e) { } };
+    }, [id, isG]);
     function onType(v) { setTxt(v); var n = Date.now(); if (chRef.current && n - lastT.current > 2500 && v) { lastT.current = n; try { chRef.current.send({ type: 'broadcast', event: 'typing', payload: { from: me } }); } catch (e) { } } }
     function pickFile(e) {
       var fl = e.target.files && e.target.files[0]; e.target.value = ''; if (!fl) return; setErr('');
@@ -218,72 +293,89 @@
           if (up.error) throw up.error;
           adj = { path: path, name: U.safeName(file.name), size: file.size, type: MIME_EXT[ext] || file.type };
         }
-        var r = await sb().from('pb_mensajes').insert({ de: me, para: peer, cuerpo: body.slice(0, 4000), adjunto: adj }).select().single();
+        var row = isG ? { de: me, grupo_id: id, cuerpo: body.slice(0, 4000), adjunto: adj } : { de: me, para: id, cuerpo: body.slice(0, 4000), adjunto: adj };
+        var r = await sb().from('pb_mensajes').insert(row).select().single();
         if (r.error) throw r.error;
         core.merge(r.data); setTxt(''); setFile(null);
       } catch (e) { setErr('No se pudo enviar: ' + U.errMsg(e)); }
       setBusy(false);
     }
-    var cfg = U.cfgGet(), muted = !!cfg.muted[peer], lastDay = '';
+    var cfg = U.cfgGet(), muted = !!cfg.muted[id], lastDay = '', title = isG ? (g ? g.nombre : 'Grupo') : (f ? full(f) : 'Usuario');
+    if (isG && !g) return h('div', { className: 'pb-empty pb-th' }, 'Ya no perteneces a este grupo.', h('div', null, h('button', { type: 'button', className: 'pb-b', style: { marginTop: 10 }, onClick: p.onBack }, 'Volver')));
     return h('div', { className: 'pb-th' },
       h('div', { style: { display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid var(--pb-line)' } },
         h('button', { type: 'button', className: 'pb-b pb-back', onClick: p.onBack, 'aria-label': 'Volver a conversaciones' }, h(Ico, { n: 'back', s: 14 })),
-        f ? h(Avatar, { f: f, size: 36, estado: core.estado(f) }) : null,
-        h('div', { style: { minWidth: 0, flex: 1 } }, h('div', { className: 'pb-nm pb-ell' }, f ? full(f) : 'Usuario'), h('div', { className: 'pb-sub' }, typing ? 'escribiendo…' : (f ? U.ESTADOS[core.estado(f)] : ''))),
-        f ? h('button', { type: 'button', className: 'pb-b', onClick: function () { p.onOpen(f); } }, 'Ver ficha') : null,
-        h('button', { type: 'button', className: 'pb-b', onClick: function () { var c = U.cfgGet(); c.muted[peer] = !c.muted[peer]; U.cfgSet(c); p.refresh(); }, title: 'Silenciar avisos de este chat' }, muted ? 'Silenciado' : 'Silenciar')),
+        isG ? h(GAvatar, { g: g, size: 36 }) : (f ? h(Avatar, { f: f, size: 36, estado: core.estado(f) }) : null),
+        h('div', { style: { minWidth: 0, flex: 1 } }, h('div', { className: 'pb-nm pb-ell' }, title), h('div', { className: 'pb-sub pb-ell', 'aria-live': 'polite' }, tt || (isG ? (core.members[id] || []).length + ' miembros' : (f ? U.ESTADOS[core.estado(f)] : '')))),
+        isG ? h('button', { type: 'button', className: 'pb-b', onClick: function () { setShowMem(true); } }, 'Miembros') : (f ? h('button', { type: 'button', className: 'pb-b', onClick: function () { p.onOpen(f); } }, 'Ver ficha') : null),
+        h('button', { type: 'button', className: 'pb-b', onClick: function () { var c = U.cfgGet(); c.muted[id] = !c.muted[id]; U.cfgSet(c); core.pushEnsure(); p.refresh(); }, title: 'Silenciar avisos de este chat' }, muted ? 'Silenciado' : 'Silenciar')),
       h('div', { className: 'pb-msgs', ref: end, role: 'log', 'aria-live': 'polite', 'aria-label': 'Mensajes' },
         !msgs.length ? h('div', { className: 'pb-empty' }, 'Aún no hay mensajes. Escribe el primero.') : null,
         msgs.map(function (m) {
           var d = new Date(m.creado).toDateString(), sep = d !== lastDay ? h('div', { key: 'd' + m.id, className: 'pb-day' }, new Date(m.creado).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })) : null; lastDay = d;
-          return [sep, h('div', { key: m.id, className: 'pb-m ' + (m.de === me ? 'me' : 'ot') }, m.adjunto ? h(Attach, { a: m.adjunto }) : null, m.cuerpo ? h('div', null, m.cuerpo) : null, h('div', { className: 'pb-meta' }, U.fmtTime(m.creado), h(Ticks, { m: m })))];
-        })),
+          var from = isG && m.de !== me ? core.byUser(m.de) : null;
+          return [sep, h('div', { key: m.id, className: 'pb-m ' + (m.de === me ? 'me' : 'ot') }, from ? h('div', { className: 'pb-sn' }, full(from)) : null, m.adjunto ? h(Attach, { a: m.adjunto }) : null, m.cuerpo ? h('div', null, m.cuerpo) : null, h('div', { className: 'pb-meta' }, U.fmtTime(m.creado), h(Ticks, { m: m })))];
+        }),
+        tt ? h('div', { className: 'pb-typing', key: 'typing' }, tt) : null),
       err ? h('div', { className: 'pb-err', role: 'alert', style: { padding: '0 12px' } }, err) : null,
       file ? h('div', { className: 'pb-att', style: { margin: '0 10px' } }, h(Ico, { n: 'clip', s: 14 }), h('span', { className: 'pb-ell', style: { flex: 1 } }, file.name), h('span', null, U.fmtSize(file.size)), h('button', { type: 'button', className: 'pb-b', style: { padding: '2px 8px' }, onClick: function () { setFile(null); }, 'aria-label': 'Quitar adjunto' }, h(Ico, { n: 'x', s: 12 }))) : null,
       h('div', { className: 'pb-comp' },
         h('input', { ref: fileIn, type: 'file', hidden: true, onChange: pickFile, accept: '.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx' }),
         h('button', { type: 'button', className: 'pb-b', onClick: function () { fileIn.current && fileIn.current.click(); }, 'aria-label': 'Adjuntar archivo (hasta 25 MB)', title: 'Adjuntar (hasta 25 MB)' }, h(Ico, { n: 'clip', s: 15 })),
         h('textarea', { className: 'pb-in', rows: 1, value: txt, maxLength: 4000, placeholder: 'Escribe un mensaje…', 'aria-label': 'Mensaje', onChange: function (e) { onType(e.target.value); }, onKeyDown: function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } }),
-        h('button', { type: 'button', className: 'pb-b prim', disabled: busy || (!txt.trim() && !file), onClick: send }, h(Ico, { n: 'send', s: 14 }), busy ? 'Enviando…' : 'Enviar')));
+        h('button', { type: 'button', className: 'pb-b prim', disabled: busy || (!txt.trim() && !file), onClick: send }, h(Ico, { n: 'send', s: 14 }), busy ? 'Enviando…' : 'Enviar')),
+      showMem && g ? h(Members, { g: g, onClose: function () { setShowMem(false); }, onLeft: function () { setShowMem(false); p.onBack(); } }) : null);
   }
   function Chat(p) {
-    var me = U.meId(), s = useState(''), q = s[0], setQ = s[1], s2 = useState(0), tick = s2[0], setTick = s2[1];
-    var convs = (function () {
-      var m = {}; core.msgs.forEach(function (x) { var o = x.de === me ? x.para : x.de; var c = m[o] || (m[o] = { peer: o, last: x, unread: 0 }); c.last = x; if (x.para === me && !x.leido_en) c.unread++; });
-      var arr = Object.keys(m).map(function (k) { return m[k]; }); arr.sort(function (a, b) { return a.last.creado < b.last.creado ? 1 : -1; });
-      if (p.peer && !m[p.peer]) arr.unshift({ peer: p.peer, last: null, unread: 0 });
+    var me = U.meId(), s = useState(''), q = s[0], setQ = s[1], s2 = useState(0), tick = s2[0], setTick = s2[1], s3 = useState(false), ng = s3[0], setNg = s3[1];
+    var sel = p.sel, convs = (function () {
+      var m = {}; core.msgs.forEach(function (x) {
+        if (x.grupo_id) return;
+        var o = x.de === me ? x.para : x.de; var c = m[o] || (m[o] = { t: 'u', id: o, last: x, unread: 0 }); c.last = x; if (x.para === me && !x.leido_en) c.unread++;
+      });
+      var arr = Object.keys(m).map(function (k) { return m[k]; });
+      core.groups.forEach(function (g) {
+        var last = null; core.msgs.forEach(function (x) { if (x.grupo_id === g.id) last = x; });
+        arr.push({ t: 'g', id: g.id, g: g, last: last, unread: core.groupUnread(g.id) });
+      });
+      arr.sort(function (a, b) { var ta = a.last ? a.last.creado : (a.g ? a.g.creado : ''), tb = b.last ? b.last.creado : (b.g ? b.g.creado : ''); return ta < tb ? 1 : -1; });
+      if (sel && sel.t === 'u' && !m[sel.id]) arr.unshift({ t: 'u', id: sel.id, last: null, unread: 0 });
       return arr;
     })();
-    var nq = U.norm(q), list = convs.filter(function (c) { var f = core.byUser(c.peer); return !nq || (f && U.norm(full(f)).indexOf(nq) >= 0); });
+    var nq = U.norm(q), list = convs.filter(function (c) { var name = c.t === 'g' ? (c.g ? c.g.nombre : '') : (core.byUser(c.id) ? full(core.byUser(c.id)) : ''); return !nq || U.norm(name).indexOf(nq) >= 0; });
     var newOpts = core.dir.filter(function (f) { return f.user_id && f.user_id !== me && f.activo; });
-    return h('div', { className: 'pb-panel pb-chat' + (p.peer ? ' th' : '') },
+    return h('div', { className: 'pb-panel pb-chat' + (sel ? ' th' : '') },
       h('div', { className: 'pb-inbox' },
         h('div', { style: { padding: 10, display: 'flex', flexDirection: 'column', gap: 6 } },
           h('input', { className: 'pb-in', type: 'search', placeholder: 'Buscar conversación…', 'aria-label': 'Buscar conversación', value: q, onChange: function (e) { setQ(e.target.value); } }),
-          h('select', { className: 'pb-in', 'aria-label': 'Nueva conversación', value: '', onChange: function (e) { if (e.target.value) p.setPeer(e.target.value); } }, h('option', { value: '' }, '+ Nueva conversación…'), newOpts.map(function (f) { return h('option', { key: f.user_id, value: f.user_id }, full(f)); }))),
-        !list.length ? h('div', { className: 'pb-empty' }, convs.length ? 'Sin coincidencias.' : 'No tienes conversaciones. Abre una ficha y pulsa «Chatear», o usa «Nueva conversación».') : null,
+          h('div', { style: { display: 'flex', gap: 6 } },
+            h('select', { className: 'pb-in', 'aria-label': 'Nueva conversación', value: '', onChange: function (e) { if (e.target.value) p.setSel({ t: 'u', id: e.target.value }); } }, h('option', { value: '' }, '+ Nueva conversación…'), newOpts.map(function (f) { return h('option', { key: f.user_id, value: f.user_id }, full(f)); })),
+            h('button', { type: 'button', className: 'pb-b', onClick: function () { setNg(true); }, title: 'Crear un grupo' }, h(Ico, { n: 'plus', s: 14 }), 'Grupo'))),
+        !list.length ? h('div', { className: 'pb-empty' }, convs.length ? 'Sin coincidencias.' : 'No tienes conversaciones. Abre una ficha y pulsa «Chatear», o crea un grupo.') : null,
         list.map(function (c) {
-          var f = core.byUser(c.peer); if (!f) return null;
-          return h('button', { key: c.peer, type: 'button', className: 'pb-conv', 'aria-current': p.peer === c.peer, onClick: function () { p.setPeer(c.peer); } },
-            h(Avatar, { f: f, size: 40, estado: core.estado(f) }),
-            h('div', { style: { minWidth: 0, flex: 1 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6 } }, h('span', { className: 'pb-nm pb-ell' }, full(f)), c.last ? h('span', { className: 'pb-sub', style: { fontSize: 11, flex: 'none' } }, U.fmtTime(c.last.creado)) : null),
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6 } }, h('span', { className: 'pb-sub pb-ell' }, c.last ? (c.last.de === me ? 'Tú: ' : '') + (c.last.cuerpo || '📎 ' + (c.last.adjunto && c.last.adjunto.name)) : 'Conversación nueva'), c.unread ? h('span', { className: 'pb-cnt', 'aria-label': c.unread + ' sin leer' }, c.unread) : null)));
+          var f = c.t === 'u' ? core.byUser(c.id) : null; if (c.t === 'u' && !f) return null;
+          var name = c.t === 'g' ? c.g.nombre : full(f), lastTxt = c.last ? (c.last.de === me ? 'Tú: ' : (c.t === 'g' && core.byUser(c.last.de) ? core.byUser(c.last.de).nombres + ': ' : '')) + (c.last.cuerpo || '📎 ' + (c.last.adjunto && c.last.adjunto.name)) : (c.t === 'g' ? 'Grupo nuevo' : 'Conversación nueva');
+          return h('button', { key: c.t + c.id, type: 'button', className: 'pb-conv', 'aria-current': !!(sel && sel.t === c.t && sel.id === c.id), onClick: function () { p.setSel({ t: c.t, id: c.id }); } },
+            c.t === 'g' ? h(GAvatar, { g: c.g, size: 40 }) : h(Avatar, { f: f, size: 40, estado: core.estado(f) }),
+            h('div', { style: { minWidth: 0, flex: 1 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6 } }, h('span', { className: 'pb-nm pb-ell' }, name), c.last ? h('span', { className: 'pb-sub', style: { fontSize: 11, flex: 'none' } }, U.fmtTime(c.last.creado)) : null),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6 } }, h('span', { className: 'pb-sub pb-ell' }, lastTxt), c.unread ? h('span', { className: 'pb-cnt', 'aria-label': c.unread + ' sin leer' }, c.unread) : null)));
         })),
-      p.peer ? h(Thread, { key: p.peer, peer: p.peer, onBack: function () { p.setPeer(''); }, onOpen: p.onOpen, refresh: function () { setTick(tick + 1); } }) : h('div', { className: 'pb-empty pb-th', style: { justifyContent: 'center' } }, h(Ico, { n: 'chat', s: 36 }), h('div', { style: { marginTop: 8 } }, 'Selecciona una conversación')));
+      sel ? h(Thread, { key: sel.t + sel.id, sel: sel, onBack: function () { p.setSel(null); }, onOpen: p.onOpen, refresh: function () { setTick(tick + 1); } }) : h('div', { className: 'pb-empty pb-th', style: { justifyContent: 'center' } }, h(Ico, { n: 'chat', s: 36 }), h('div', { style: { marginTop: 8 } }, 'Selecciona una conversación')),
+      ng ? h(NewGroup, { onClose: function () { setNg(false); }, onCreated: function (gid) { setNg(false); p.setSel({ t: 'g', id: gid }); } }) : null);
   }
 
   /* ---------- pestaña ---------- */
   function Tab(p) {
     var c = window.PB.core; var cc = U.useCore();
-    var q0 = new URLSearchParams(location.search).get('chat') || '';
-    var s1 = useState(q0 ? 'chat' : 'dir'), tab = s1[0], setTab = s1[1], s2 = useState(null), open = s2[0], setOpen = s2[1], s3 = useState(null), form = s3[0], setForm = s3[1], s4 = useState(q0), peer = s4[0], setPeer = s4[1];
-    useEffect(function () { var f = function (e) { if (e.data && e.data.type === 'pb-open' && e.data.peer) { setPeer(e.data.peer); setTab('chat'); } }; if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', f); return function () { if (navigator.serviceWorker) navigator.serviceWorker.removeEventListener('message', f); }; }, []);
+    var qs = new URLSearchParams(location.search), q0 = qs.get('grupo') ? { t: 'g', id: qs.get('grupo') } : qs.get('chat') ? { t: 'u', id: qs.get('chat') } : null;
+    var s1 = useState(q0 ? 'chat' : 'dir'), tab = s1[0], setTab = s1[1], s2 = useState(null), open = s2[0], setOpen = s2[1], s3 = useState(null), form = s3[0], setForm = s3[1], s4 = useState(q0), sel = s4[0], setSel = s4[1];
     var s5 = useState(''), toast = s5[0], setToast = s5[1], s6 = useState(''), modal = s6[0], setModal = s6[1], s7 = useState([]), visible = s7[0], setVisible = s7[1];
     var adm = U.isAdm(), me = U.meId();
+    useEffect(function () { var f = function (e) { var d = e.data; if (d && d.type === 'pb-open') { if (d.grupo) { setSel({ t: 'g', id: d.grupo }); setTab('chat'); } else if (d.peer) { setSel({ t: 'u', id: d.peer }); setTab('chat'); } } }; if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', f); return function () { if (navigator.serviceWorker) navigator.serviceWorker.removeEventListener('message', f); }; }, []);
     useEffect(function () { if (!toast) return; var t = setTimeout(function () { setToast(''); }, 4000); return function () { clearTimeout(t); }; }, [toast]);
     var openFresh = open ? (c.dir.filter(function (x) { return x.id === open.id; })[0] || open) : null;
     async function toggle(f) { var r = await sb().from('pb_fichas').update({ activo: !f.activo }).eq('id', f.id); if (r.error) setToast(U.errMsg(r.error)); else { setToast(f.activo ? 'Ficha desactivada.' : 'Ficha reactivada.'); setOpen(null); c.loadDir(); } }
-    function goChat(f) { setOpen(null); setPeer(f.user_id); setTab('chat'); }
+    function goChat(f) { setOpen(null); setSel({ t: 'u', id: f.user_id }); setTab('chat'); }
     var tabs = [['dir', 'Directorio'], ['org', 'Organigrama'], ['chat', 'Mensajes', c.unread]].concat(adm ? [['adm', 'Administración']] : []);
     var mine = c.dir.filter(function (f) { return f.user_id === me; })[0];
     return h('div', { className: 'pb' },
@@ -296,7 +388,7 @@
       h('div', { className: 'pb-tabs', role: 'tablist' }, tabs.map(function (t) { return h('button', { key: t[0], type: 'button', role: 'tab', className: 'pb-tab', 'aria-selected': tab === t[0], onClick: function () { setTab(t[0]); } }, t[1], t[2] ? h('span', { className: 'pb-cnt' }, t[2]) : null); })),
       tab === 'dir' ? h(Directory, { onOpen: setOpen, setVisible: setVisible })
         : tab === 'org' ? h(OrgChart, { onOpen: setOpen })
-          : tab === 'chat' ? h(Chat, { peer: peer, setPeer: setPeer, onOpen: setOpen })
+          : tab === 'chat' ? h(Chat, { sel: sel, setSel: setSel, onOpen: setOpen })
             : h('div', { className: 'pb-panel', style: { padding: 16 } },
               h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
                 h('button', { type: 'button', className: 'pb-b prim', onClick: function () { setForm('nueva'); } }, h(Ico, { n: 'plus', s: 14 }), 'Nueva ficha'),
