@@ -35,6 +35,7 @@ td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,tr
 <link rel="stylesheet" href="/theme.css">
 <div class="wrap" id="app"></div>
 <div class="wrap" id="pbroot" hidden style="padding-top:0"></div>
+<div class="wrap" id="docsroot" hidden style="padding-top:0"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <!--PB_MODULE-->
@@ -44,8 +45,8 @@ td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,tr
   if (!sb || !me.id) { document.body.textContent = 'Sesión no disponible.'; return; }
   var tabSel = 'pm', rows = [], busy = false, msg = null, draft = { date: today(), project: '', activity: '', horas: '', note: '' };
   var T = {
-    es: { eyebrow: 'SAI GROUP INTERNATIONAL - DAEGCORP', sub: 'Project Manager · Registro semanal de horas', tab: 'Project Manager', reg: 'Registrar horas', date: 'Fecha', project: 'Proyecto / campo', activity: 'Actividad realizada', hours: 'Horas', note: 'Notas (opcional)', submit: 'Registrar horas', warn: 'Importante: una vez registrada, la entrada no puede editarse ni eliminarse. Si necesita corregir algo, comuníquese con el administrador o el gerente de StrataFlow.', confirm: '¿Confirma el registro de {h} h el {d}? No podrá editarlo ni eliminarlo después.', mine: 'Mis horas registradas', week: 'Semana del', total: 'Total', empty: 'Aún no ha registrado horas.', fDate: 'Escriba la fecha.', fFut: 'La fecha no puede ser futura.', fProj: 'Indique el proyecto o campo.', fAct: 'Describa la actividad.', fHrs: 'Las horas deben estar entre 0,25 y 24.', saved: 'Horas registradas.', fail: 'No se pudo registrar: ', exit: 'Salir', ph: 'p. ej., 2,5', h: 'h', ro: 'Solo lectura' },
-    en: { eyebrow: 'SAI GROUP INTERNATIONAL - DAEGCORP', sub: 'Project Manager · Weekly hours log', tab: 'Project Manager', reg: 'Log hours', date: 'Date', project: 'Project / field', activity: 'Activity performed', hours: 'Hours', note: 'Notes (optional)', submit: 'Log hours', warn: 'Important: once logged, an entry cannot be edited or deleted. If you need a correction, contact the StrataFlow administrator or manager.', confirm: 'Confirm logging {h} h on {d}? You will not be able to edit or delete it later.', mine: 'My logged hours', week: 'Week of', total: 'Total', empty: 'No hours logged yet.', fDate: 'Enter the date.', fFut: 'The date cannot be in the future.', fProj: 'Enter the project or field.', fAct: 'Describe the activity.', fHrs: 'Hours must be between 0.25 and 24.', saved: 'Hours logged.', fail: 'Could not log: ', exit: 'Sign out', ph: 'e.g., 2.5', h: 'h', ro: 'Read only' }
+    es: { eyebrow: 'SAI GROUP INTERNATIONAL - DAEGCORP', sub: 'Project Manager · Registro semanal de horas', tab: 'Project Manager', docs: 'Documentos', reg: 'Registrar horas', date: 'Fecha', project: 'Proyecto / campo', activity: 'Actividad realizada', hours: 'Horas', note: 'Notas (opcional)', submit: 'Registrar horas', warn: 'Importante: una vez registrada, la entrada no puede editarse ni eliminarse. Si necesita corregir algo, comuníquese con el administrador o el gerente de StrataFlow.', confirm: '¿Confirma el registro de {h} h el {d}? No podrá editarlo ni eliminarlo después.', mine: 'Mis horas registradas', week: 'Semana del', total: 'Total', empty: 'Aún no ha registrado horas.', fDate: 'Escriba la fecha.', fFut: 'La fecha no puede ser futura.', fProj: 'Indique el proyecto o campo.', fAct: 'Describa la actividad.', fHrs: 'Las horas deben estar entre 0,25 y 24.', saved: 'Horas registradas.', fail: 'No se pudo registrar: ', exit: 'Salir', ph: 'p. ej., 2,5', h: 'h', ro: 'Solo lectura' },
+    en: { eyebrow: 'SAI GROUP INTERNATIONAL - DAEGCORP', sub: 'Project Manager · Weekly hours log', tab: 'Project Manager', docs: 'Documents', reg: 'Log hours', date: 'Date', project: 'Project / field', activity: 'Activity performed', hours: 'Hours', note: 'Notes (optional)', submit: 'Log hours', warn: 'Important: once logged, an entry cannot be edited or deleted. If you need a correction, contact the StrataFlow administrator or manager.', confirm: 'Confirm logging {h} h on {d}? You will not be able to edit or delete it later.', mine: 'My logged hours', week: 'Week of', total: 'Total', empty: 'No hours logged yet.', fDate: 'Enter the date.', fFut: 'The date cannot be in the future.', fProj: 'Enter the project or field.', fAct: 'Describe the activity.', fHrs: 'Hours must be between 0.25 and 24.', saved: 'Hours logged.', fail: 'Could not log: ', exit: 'Sign out', ph: 'e.g., 2.5', h: 'h', ro: 'Read only' }
   };
   function t(k) { return T[LANG][k]; }
   function p2(n) { return (n < 10 ? '0' : '') + n; }
@@ -59,7 +60,7 @@ td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,tr
 
   function field(id, label, node) { return el('div', {}, el('label', { 'for': id, text: label }), node); }
   function render() {
-    var app = document.getElementById('app'); app.textContent = '';
+    var app = document.getElementById('app'); app.textContent = ''; app.style.paddingBottom = tabSel === 'pm' ? '' : '0';
     var langSeg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Language' });
     ['EN', 'ES'].forEach(function (l) { langSeg.appendChild(el('button', { type: 'button', text: l, 'aria-pressed': String(LANG === l.toLowerCase()), onclick: function () { LANG = l.toLowerCase(); render(); } })); });
     var light = window.SFTheme && window.SFTheme.get() === 'light';
@@ -67,13 +68,15 @@ td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,tr
     thBtn.innerHTML = light ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
     var top = el('div', { class: 'top' }, el('div', {}, el('div', { class: 'eyebrow', text: t('eyebrow') }), el('h1', { text: 'STRATAFLOW' }), el('div', { class: 'sub', text: t('sub') })), el('div', { style: 'display:flex;gap:8px;align-items:center' }, thBtn, langSeg));
     var tabs = el('div', { class: 'tabs', role: 'tablist' });
-    [['pm', t('tab')], ['pb', 'Páginas Blancas']].forEach(function (x) {
+    [['pm', t('tab')], ['pb', 'Páginas Blancas']].concat(window.DOCS ? [['docs', t('docs')]] : []).forEach(function (x) {
       var b = el('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(tabSel === x[0]), text: x[1], style: tabSel === x[0] ? '' : 'border-bottom-color:transparent;color:var(--muted);cursor:pointer', onclick: function () { tabSel = x[0]; render(); } });
       if (x[0] === 'pb') b.appendChild(el('span', { id: 'pbbadge', class: 'mono', style: 'margin-left:6px;background:var(--accent);color:var(--on-accent,#1a1205);border-radius:99px;padding:0 7px;font-size:11px;font-weight:700' + (window.PB && PB.core.unread ? '' : ';display:none'), text: String(window.PB ? PB.core.unread : 0) }));
       tabs.appendChild(b);
     });
     var pbroot = document.getElementById('pbroot'); pbroot.hidden = tabSel !== 'pb';
     if (tabSel === 'pb' && window.PB && !pbroot._m) { pbroot._m = ReactDOM.createRoot(pbroot); pbroot._m.render(React.createElement(PB.Tab)); }
+    var docsroot = document.getElementById('docsroot'); docsroot.hidden = tabSel !== 'docs';
+    if (tabSel === 'docs' && window.DOCS) { if (!docsroot._m) docsroot._m = ReactDOM.createRoot(docsroot); docsroot._m.render(React.createElement(DOCS.Tab, { lang: LANG })); }
 
     var fDate = el('input', { id: 'd', type: 'date', value: draft.date, max: today() }); fDate.oninput = function () { draft.date = fDate.value; };
     var fProj = el('input', { id: 'pr', type: 'text', maxlength: '120', value: draft.project }); fProj.oninput = function () { draft.project = fProj.value; };
@@ -101,7 +104,7 @@ td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,tr
     });
     var bar = el('div', { style: 'position:fixed;right:10px;bottom:10px;z-index:9999;background:#14202b;color:#cfd8dc;border:1px solid #2c3e4c;border-radius:8px;padding:6px 10px;font:12px sans-serif;display:flex;gap:10px;align-items:center' }, el('span', { text: (me.disp || me.email || '') + ' · SAI' }),
       el('button', { type: 'button', text: t('exit'), style: 'background:#e08a1e;color:#111;border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px sans-serif', onclick: function () { sb.auth.signOut().then(function () { location.reload(); }); } }));
-    (tabSel === 'pb' ? [top, tabs, bar] : [top, tabs, form, list, bar]).forEach(function (n) { app.appendChild(n); });
+    (tabSel === 'pb' || tabSel === 'docs' ? [top, tabs, bar] : [top, tabs, form, list, bar]).forEach(function (n) { app.appendChild(n); });
   }
 
   async function submit() {
