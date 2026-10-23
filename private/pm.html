@@ -32,11 +32,15 @@ td{padding:8px 10px;border-bottom:1px solid #26373f99;vertical-align:top}
 .seg button{background:var(--panel2);color:var(--fg);border:0;padding:5px 10px;cursor:pointer;font:500 13px inherit}.seg button[aria-pressed=true]{background:var(--accent);color:#1a1205;font-weight:600}
 </style>
 <div class="wrap" id="app"></div>
+<div class="wrap" id="pbroot" hidden style="padding-top:0"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<!--PB_MODULE-->
 <script>
 (function () {
   var sb = window.__sb, me = window.OPT_USER || {}, LANG = (navigator.language || 'es').toLowerCase().indexOf('en') === 0 ? 'en' : 'es';
   if (!sb || !me.id) { document.body.textContent = 'Sesión no disponible.'; return; }
-  var rows = [], busy = false, msg = null, draft = { date: today(), project: '', activity: '', horas: '', note: '' };
+  var tabSel = 'pm', rows = [], busy = false, msg = null, draft = { date: today(), project: '', activity: '', horas: '', note: '' };
   var T = {
     es: { eyebrow: 'Dirección Acelerada de Estudios Geocientíficos', sub: 'Project Manager · Registro semanal de horas', tab: 'Project Manager', reg: 'Registrar horas', date: 'Fecha', project: 'Proyecto / campo', activity: 'Actividad realizada', hours: 'Horas', note: 'Notas (opcional)', submit: 'Registrar horas', warn: 'Importante: una vez registrada, la entrada no puede editarse ni eliminarse. Si necesita corregir algo, comuníquese con el administrador o el gerente de StrataFlow.', confirm: '¿Confirma el registro de {h} h el {d}? No podrá editarlo ni eliminarlo después.', mine: 'Mis horas registradas', week: 'Semana del', total: 'Total', empty: 'Aún no ha registrado horas.', fDate: 'Escriba la fecha.', fFut: 'La fecha no puede ser futura.', fProj: 'Indique el proyecto o campo.', fAct: 'Describa la actividad.', fHrs: 'Las horas deben estar entre 0,25 y 24.', saved: 'Horas registradas.', fail: 'No se pudo registrar: ', exit: 'Salir', ph: 'p. ej., 2,5', h: 'h', ro: 'Solo lectura' },
     en: { eyebrow: 'Accelerated Geoscience Studies Directorate', sub: 'Project Manager · Weekly hours log', tab: 'Project Manager', reg: 'Log hours', date: 'Date', project: 'Project / field', activity: 'Activity performed', hours: 'Hours', note: 'Notes (optional)', submit: 'Log hours', warn: 'Important: once logged, an entry cannot be edited or deleted. If you need a correction, contact the StrataFlow administrator or manager.', confirm: 'Confirm logging {h} h on {d}? You will not be able to edit or delete it later.', mine: 'My logged hours', week: 'Week of', total: 'Total', empty: 'No hours logged yet.', fDate: 'Enter the date.', fFut: 'The date cannot be in the future.', fProj: 'Enter the project or field.', fAct: 'Describe the activity.', fHrs: 'Hours must be between 0.25 and 24.', saved: 'Hours logged.', fail: 'Could not log: ', exit: 'Sign out', ph: 'e.g., 2.5', h: 'h', ro: 'Read only' }
@@ -57,7 +61,14 @@ td{padding:8px 10px;border-bottom:1px solid #26373f99;vertical-align:top}
     var langSeg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Language' });
     ['EN', 'ES'].forEach(function (l) { langSeg.appendChild(el('button', { type: 'button', text: l, 'aria-pressed': String(LANG === l.toLowerCase()), onclick: function () { LANG = l.toLowerCase(); render(); } })); });
     var top = el('div', { class: 'top' }, el('div', {}, el('div', { class: 'eyebrow', text: t('eyebrow') }), el('h1', { text: 'STRATAFLOW' }), el('div', { class: 'sub', text: t('sub') })), langSeg);
-    var tabs = el('div', { class: 'tabs', role: 'tablist' }, el('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': 'true', text: t('tab') }));
+    var tabs = el('div', { class: 'tabs', role: 'tablist' });
+    [['pm', t('tab')], ['pb', 'Páginas Blancas']].forEach(function (x) {
+      var b = el('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(tabSel === x[0]), text: x[1], style: tabSel === x[0] ? '' : 'border-bottom-color:transparent;color:var(--muted);cursor:pointer', onclick: function () { tabSel = x[0]; render(); } });
+      if (x[0] === 'pb') b.appendChild(el('span', { id: 'pbbadge', class: 'mono', style: 'margin-left:6px;background:var(--accent);color:#1a1205;border-radius:99px;padding:0 7px;font-size:11px;font-weight:700' + (window.PB && PB.core.unread ? '' : ';display:none'), text: String(window.PB ? PB.core.unread : 0) }));
+      tabs.appendChild(b);
+    });
+    var pbroot = document.getElementById('pbroot'); pbroot.hidden = tabSel !== 'pb';
+    if (tabSel === 'pb' && window.PB && !pbroot._m) { pbroot._m = ReactDOM.createRoot(pbroot); pbroot._m.render(React.createElement(PB.Tab)); }
 
     var fDate = el('input', { id: 'd', type: 'date', value: draft.date, max: today() }); fDate.oninput = function () { draft.date = fDate.value; };
     var fProj = el('input', { id: 'pr', type: 'text', maxlength: '120', value: draft.project }); fProj.oninput = function () { draft.project = fProj.value; };
@@ -85,7 +96,7 @@ td{padding:8px 10px;border-bottom:1px solid #26373f99;vertical-align:top}
     });
     var bar = el('div', { style: 'position:fixed;right:10px;bottom:10px;z-index:9999;background:#14202b;color:#cfd8dc;border:1px solid #2c3e4c;border-radius:8px;padding:6px 10px;font:12px sans-serif;display:flex;gap:10px;align-items:center' }, el('span', { text: (me.disp || me.email || '') + ' · SAI' }),
       el('button', { type: 'button', text: t('exit'), style: 'background:#e08a1e;color:#111;border:0;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px sans-serif', onclick: function () { sb.auth.signOut().then(function () { location.reload(); }); } }));
-    [top, tabs, form, list, bar].forEach(function (n) { app.appendChild(n); });
+    (tabSel === 'pb' ? [top, tabs, bar] : [top, tabs, form, list, bar]).forEach(function (n) { app.appendChild(n); });
   }
 
   async function submit() {
@@ -108,5 +119,10 @@ td{padding:8px 10px;border-bottom:1px solid #26373f99;vertical-align:top}
     rows = (r.data || []).map(function (x) { return x.data; }).filter(function (d) { return d && d.owner === me.id; });
   }
   load().then(render);
+  if (window.PB) {
+    PB.core.start();
+    PB.core.ls.push(function () { var b = document.getElementById('pbbadge'); if (b) { b.textContent = String(PB.core.unread); b.style.display = PB.core.unread ? '' : 'none'; } });
+    PB.core.newCb.push(function (m) { var d = document.createElement('div'); d.setAttribute('role', 'status'); d.textContent = '💬 ' + m; d.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:56px;background:#16242b;border:1px solid #f0a540;border-radius:8px;padding:8px 14px;z-index:10002;font-size:13px'; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 5000); });
+  }
 })();
 </script>

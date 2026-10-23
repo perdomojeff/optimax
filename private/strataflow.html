@@ -201,6 +201,7 @@ svg text { font-family: var(--font-mono); font-size: 11px; }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<!--PB_MODULE-->
 <script>
 (function () {
 /* ================= STRATAFLOW ENGINE (pure functions) ================= */
@@ -5417,6 +5418,7 @@ function App() {
   var s4 = useState({}), nav = s4[0], setNav = s4[1];
   var s5 = useState(''), msg = s5[0], setMsg = s5[1];
   var toast = useCallback(function (m) { setMsg(m); }, []);
+  var pbUnread = window.PB ? window.PB.useUnread(useCallback(function (m) { setMsg('💬 ' + m); }, [])) : 0;
   useEffect(function () { if (!msg) return; var t = setTimeout(function () { setMsg(''); }, 6000); return function () { clearTimeout(t); }; }, [msg]);
   var store = useStore(function (e) { toast(e && e.message ? e.message : L('Error de datos', 'Data error')); });
   var fields = useMemo(function () {
@@ -5475,13 +5477,13 @@ function App() {
       h('div', { style: { minWidth: 0, flex: '1 1 320px' } },
         h('div', { className: 'eyebrow mb-1' }, L('Optimización y reactivación de pozos · Occidente y Oriente VZLA', 'Well optimization and reactivation · Western & Eastern Venezuela')),
         h('h1', { className: 'disp wm' }, 'STRATAFLOW'),
-        h('div', { className: 'disp', style: { fontSize: 'clamp(16px, 2.4vw, 21px)', color: 'var(--accent)', fontWeight: 500 } }, mod === 'ops' ? L('Tablero operativo de pozos', 'Well operations dashboard') : mod === 'pros' ? L('Prospectividad · Jerarquía de campos y yacimientos', 'Prospectivity · Field and reservoir ranking') : mod === 'fld' ? L('Análisis de campo · Chimire', 'Field analysis · Chimire') : mod === 'pred' ? L('Predictivo · Escenarios Monte Carlo por campo y yacimiento', 'Predictive · Monte Carlo scenarios by field and reservoir') : mod === 'map' ? L('Mapas · Pozos con coordenadas, candidatos y filtros', 'Maps · Wells with coordinates, candidates and filters') : mod === 'pm' ? L('Project Manager · Horas semanales de SAI Group', 'Project Manager · SAI Group weekly hours') : mod === 'time' ? L('Tiempo invertido · Plan Acelerado de Reactivación de Pozos', 'Time invested · Accelerated Well Reactivation Plan') : L('Evaluación económica · Plan Acelerado de Producción 2027', 'Economic evaluation · 2027 Accelerated Production Plan'))),
+        h('div', { className: 'disp', style: { fontSize: 'clamp(16px, 2.4vw, 21px)', color: 'var(--accent)', fontWeight: 500 } }, mod === 'ops' ? L('Tablero operativo de pozos', 'Well operations dashboard') : mod === 'pros' ? L('Prospectividad · Jerarquía de campos y yacimientos', 'Prospectivity · Field and reservoir ranking') : mod === 'fld' ? L('Análisis de campo · Chimire', 'Field analysis · Chimire') : mod === 'pred' ? L('Predictivo · Escenarios Monte Carlo por campo y yacimiento', 'Predictive · Monte Carlo scenarios by field and reservoir') : mod === 'map' ? L('Mapas · Pozos con coordenadas, candidatos y filtros', 'Maps · Wells with coordinates, candidates and filters') : mod === 'pm' ? L('Project Manager · Horas semanales de SAI Group', 'Project Manager · SAI Group weekly hours') : mod === 'pb' ? 'Páginas Blancas · Directorio corporativo y mensajes' : mod === 'time' ? L('Tiempo invertido · Plan Acelerado de Reactivación de Pozos', 'Time invested · Accelerated Well Reactivation Plan') : L('Evaluación económica · Plan Acelerado de Producción 2027', 'Economic evaluation · 2027 Accelerated Production Plan'))),
       h('div', { className: 'flex flex-col items-end gap-2' },
         h('div', { className: 'flex items-center gap-2', role: 'group', 'aria-label': L('Idioma', 'Language') }, h(Icon, { n: 'globe', s: 18 }),
           h('div', { className: 'seg' }, ['EN', 'ES'].map(function (l) { var c = l.toLowerCase(); return h('button', { key: l, type: 'button', className: 'btn', 'aria-pressed': lang === c, onClick: function () { setLang(c); } }, l); }))),
         h('span', { className: 'pill', style: { '--sc': chip[1] } }, h(Icon, { n: 'cloud', s: 13 }), chip[0]))),
     h('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-4' },
-      h(Tabs, { value: mod, onChange: setMod, tabs: [['pred', L('Predictivo', 'Predictive')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['time', L('Tiempo del consultor', 'Consultant time')]].concat(window.OPT_ROLE === 'admin' || window.OPT_ROLE === 'gerente' ? [['pm', 'Project Manager']] : []).concat([['lib', L('Biblioteca', 'Library')]]) }),
+      h(Tabs, { value: mod, onChange: setMod, tabs: [['pred', L('Predictivo', 'Predictive')], ['pros', L('Prospectividad', 'Prospectivity')], ['fld', L('Análisis de campo', 'Field analysis')], ['time', L('Tiempo del consultor', 'Consultant time')]].concat(window.OPT_ROLE === 'admin' || window.OPT_ROLE === 'gerente' ? [['pm', 'Project Manager']] : []).concat([['pb', 'Páginas Blancas', pbUnread || undefined]]).concat([['lib', L('Biblioteca', 'Library')]]) }),
       mod === 'ops' ? h(Tabs, { value: view, onChange: function (v) { setView(v); }, tabs: [['board', L('Tablero', 'Dashboard')], ['baskets', L('Cestas de trabajo', 'Work baskets'), counts.data + counts.minor + counts.major]] }) : null),
     mod === 'ops' ? (view === 'board' ? h(Tablero, { nav: nav, setNav: setNav, ctx: ctx }) : h(Cestas, { entries: entries, openWell: openWell, runExport: runExport, save: store.save }))
       : mod === 'pros' ? h(ProsTab, { runExport: runExport })
@@ -5489,6 +5491,7 @@ function App() {
       : mod === 'pred' ? h(PredTab, { runExport: runExport })
      
       : mod === 'pm' && (window.OPT_ROLE === 'admin' || window.OPT_ROLE === 'gerente') ? h(PMTab, { runExport: runExport })
+      : mod === 'pb' && window.PB ? h(window.PB.Tab, null)
       : mod === 'lib' ? h(LibTab, { lib: store.data.library, save: store.save, remove: store.remove, runExport: runExport, toast: toast, canWrite: store.canWrite, persist: store.mode === 'cloud' })
       : mod === 'time' ? h(TimeLog, { entries: store.data.timelog, save: store.save, remove: store.remove, runExport: runExport })
       : h(Econ, { wells: wells, entries: entries, fields: fields, reservoirs: store.data.reservoirs, fieldById: fieldById, runExport: runExport }),

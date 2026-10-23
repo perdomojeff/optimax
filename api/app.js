@@ -14,5 +14,8 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
   // Aliados SAI Group: solo reciben la vista de Project Manager (nunca el bundle completo de StrataFlow)
   const file = rows[0].role === 'sai' ? 'pm.html' : 'strataflow.html';
-  res.status(200).send(fs.readFileSync(path.join(process.cwd(), 'private', file), 'utf8'));
+  // Modulo Paginas Blancas (disponible para todos los roles activos, incluido SAI): se inyecta en ambas vistas
+  const rd = (f) => fs.readFileSync(path.join(process.cwd(), 'private', f), 'utf8');
+  const pb = '<script>' + ['pb.js', 'pb-ui.js', 'pb-app.js'].map(rd).join('\n') + '\n</script>';
+  res.status(200).send(rd(file).replace('<!--PB_MODULE-->', () => pb));
 };
