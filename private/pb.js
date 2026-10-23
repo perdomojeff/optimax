@@ -57,7 +57,7 @@
     L.push('END:VCARD'); return L.join('\r\n');
   }
   function contactText(f) {
-    return [full(f), f.cargo, f.departamento, f.sede, f.correo, f.telefono && (f.telefono + (f.extension ? ' ext. ' + f.extension : '')), f.celular].filter(Boolean).join('\n');
+    return [full(f), f.cargo, f.gerencia, f.departamento, f.sede, f.correo, f.telefono && (f.telefono + (f.extension ? ' ext. ' + f.extension : '')), f.celular].filter(Boolean).join('\n');
   }
 
   /* CSV */
@@ -77,7 +77,7 @@
     if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
     return rows.filter(function (r) { return r.some(function (x) { return String(x).trim() !== ''; }); });
   }
-  var CSV_COLS = ['nombres', 'apellidos', 'cargo', 'departamento', 'sede', 'correo', 'telefono', 'extension', 'celular', 'whatsapp', 'fecha_ingreso', 'idiomas', 'habilidades', 'biografia'];
+  var CSV_COLS = ['nombres', 'apellidos', 'cargo', 'gerencia', 'departamento', 'sede', 'correo', 'telefono', 'extension', 'celular', 'whatsapp', 'fecha_ingreso', 'idiomas', 'habilidades', 'biografia'];
 
   /* configuración local (por dispositivo) */
   function cfgGet() { try { return Object.assign({ preview: true, dnd: false, from: '22:00', to: '07:00', muted: {} }, JSON.parse(localStorage.getItem('pb_cfg') || '{}')); } catch (e) { return { preview: true, dnd: false, from: '22:00', to: '07:00', muted: {} }; } }
@@ -90,7 +90,7 @@
 
   /* ---------- núcleo compartido: directorio, mensajes, presencia ---------- */
   var core = {
-    started: false, dir: [], msgs: [], online: {}, unread: 0, loaded: false, error: '', ls: [], newCb: [], groups: [], members: {}, lect: {}, joined: {},
+    started: false, dir: [], est: [], alcance: [], ann: [], dest: [], unreadMsgs: 0, annN: 0, msgs: [], online: {}, unread: 0, loaded: false, error: '', ls: [], newCb: [], groups: [], members: {}, lect: {}, joined: {},
     emit: function () { core.ls.slice().forEach(function (f) { f(); }); },
     byUser: function (uid) { for (var i = 0; i < core.dir.length; i++) if (core.dir[i].user_id === uid) return core.dir[i]; return null; },
     ts: function (x) { return x ? Date.parse(x) || 0 : 0; },
@@ -99,7 +99,46 @@
     recount: function () {
       var me = meId(), n = core.msgs.filter(function (m) { return m.para === me && !m.leido_en; }).length;
       core.groups.forEach(function (g) { n += core.groupUnread(g.id); });
-      core.unread = n;
+      core.unreadMsgs = n; core.annN = core.annUnread(); core.unread = n + core.annN;
+    },
+    /* ----- estructura (catálogo gerencia → departamento) ----- */
+    loadEst: async function () {
+      var r = await sb().from('pb_estructura').select('gerencia,departamento,orden').order('gerencia').order('orden');
+      if (!r.error) { core.est = r.data || []; core.emit(); }
+    },
+    gerencias: function () { var m = {}, o = []; core.est.forEach(function (e) { if (!m[e.gerencia]) { m[e.gerencia] = 1; o.push(e.gerencia); } }); return o.sort(function (a, b) { return a.localeCompare(b, 'es'); }); },
+    deptos: function (g) { return core.est.filter(function (e) { return e.gerencia === g; }).sort(function (a, b) { return a.orden - b.orden; }).map(function (e) { return e.departamento; }); },
+    /* ----- anuncios ----- */
+    loadAlcance: async function () {
+      var r = await sb().rpc('pb_alcance'); if (r.error) return;
+      core.alcance = (r.data || []).map(function (x) { return typeof x === 'string' ? x : (x && (x.pb_alcance || x.user_id)) || ''; }).filter(Boolean); core.emit();
+    },
+    loadAnn: async function () {
+      var a = await Promise.all([sb().from('pb_anuncios').select('*').order('creado', { ascending: false }).limit(300), sb().from('pb_anuncio_destinos').select('*').limit(1000)]);
+      if (a[0].error || a[1].error) return;      /* v3 sin aplicar: el módulo sigue funcionando sin anuncios */
+      core.ann = a[0].data || []; core.dest = a[1].data || []; core.recount(); core.emit();
+    },
+    annMine: function (id) { var me = meId(); for (var i = 0; i < core.dest.length; i++) if (core.dest[i].anuncio_id === id && core.dest[i].user_id === me) return core.dest[i]; return null; },
+    annUnread: function () { var me = meId(); return core.dest.filter(function (d) { return d.user_id === me && !d.leido_en; }).length; },
+    annStats: function (id) { var t = 0, l = 0; core.dest.forEach(function (d) { if (d.anuncio_id === id) { t++; if (d.leido_en) l++; } }); return { total: t, leidos: l }; },
+    markAnnRead: function (id) {
+      var d = core.annMine(id); if (!d || d.leido_en) return;
+      var now = new Date().toISOString(); d.leido_en = now; core.recount(); core.emit();
+      sb().from('pb_anuncio_destinos').update({ leido_en: now }).eq('anuncio_id', id).eq('user_id', meId()).then(function () { });
+    },
+    annNotify: function (aid) {
+      var a = null, i; for (i = 0; i < core.ann.length; i++) if (core.ann[i].id === aid) a = core.ann[i];
+      if (!a || a.de === meId()) return;
+      var cfg = cfgGet(), f = core.byUser(a.de), quien = f ? full(f) : 'Anuncio';
+      core.newCb.forEach(function (cb) { try { cb('📢 ' + a.titulo); } catch (e) { } });
+      if (inDnd(cfg) || !document.hidden) return;
+      if (window.Notification && Notification.permission === 'granted') {
+        var opts = { body: cfg.preview ? String(a.cuerpo).slice(0, 120) : 'Tienes un anuncio nuevo', tag: 'pb-a-' + aid, icon: '/icon-192.png', data: { anuncio: aid } };
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(function (reg) { reg.showNotification('📢 ' + a.titulo + ' · ' + quien, opts); }, function () { new Notification('📢 ' + a.titulo, opts); });
+          else new Notification('📢 ' + a.titulo, opts);
+        } catch (e) { }
+      }
     },
     isMember: function (gid) { return core.groups.some(function (g) { return g.id === gid; }); },
     groupById: function (gid) { for (var i = 0; i < core.groups.length; i++) if (core.groups[i].id === gid) return core.groups[i]; return null; },
@@ -167,7 +206,7 @@
     },
     start: function () {
       if (core.started || !sb() || !meId()) return; core.started = true;
-      core.loadDir(); core.loadGroups().then(function () { return core.loadMsgs(); }); core.pushEnsure();
+      core.loadDir(); core.loadEst(); core.loadAlcance(); core.loadAnn(); core.loadGroups().then(function () { return core.loadMsgs(); }); core.pushEnsure();
       core.ls.push(core.badge);
       var me = meId();
       core.ch = sb().channel('pb-msgs-' + me)
@@ -180,6 +219,7 @@
           if (m.grupo_id && !core.isMember(m.grupo_id)) core.loadGroups().then(go); else if (m.grupo_id || m.de === me || m.para === me) go();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pb_grupo_miembros' }, function () { core.loadGroups().then(function () { return core.loadMsgs(); }); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pb_anuncio_destinos', filter: 'user_id=eq.' + me }, function (p) { var id = p.new && p.new.anuncio_id; core.loadAnn().then(function () { if (id) core.annNotify(id); }); })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pb_mensajes' }, function (p) { if (p.new && (p.new.de === me || p.new.para === me)) core.merge(p.new); })
         .subscribe();
       core.pres = sb().channel('pb-presence', { config: { presence: { key: me } } });
@@ -187,8 +227,8 @@
         var st = core.pres.presenceState(), o = {}; Object.keys(st).forEach(function (k) { o[k] = true; }); core.online = o; core.emit();
       }).subscribe(function (s) { if (s === 'SUBSCRIBED') core.pres.track({ at: Date.now() }); });
       /* respaldo ante canales que se caigan: recarga periódica ligera */
-      core.timer = setInterval(function () { if (!document.hidden) core.loadGroups().then(function () { return core.loadMsgs(); }); }, 60000);
-      document.addEventListener('visibilitychange', function () { if (!document.hidden) { core.loadGroups().then(function () { return core.loadMsgs(); }); core.pushEnsure(); } });
+      core.timer = setInterval(function () { if (!document.hidden) { core.loadGroups().then(function () { return core.loadMsgs(); }); core.loadAnn(); core.loadAlcance(); } }, 60000);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) { core.loadGroups().then(function () { return core.loadMsgs(); }); core.loadAnn(); core.loadAlcance(); core.pushEnsure(); } });
     },
     /* ----- Web Push (notificaciones con la aplicación cerrada) ----- */
     pushSupported: function () { return !!(navigator.serviceWorker && window.PushManager && window.Notification); },
@@ -248,5 +288,5 @@
     return c.unread;
   }
 
-  window.PB = { version: '1.0', core: core, useUnread: useUnread, _u: { full: full, initials: initials, norm: norm, fmtDate: fmtDate, fmtTime: fmtTime, fmtSize: fmtSize, normPhone: normPhone, phoneOk: phoneOk, emailOk: emailOk, listOf: listOf, download: download, uuid: uuid, safeName: safeName, errMsg: errMsg, vcard: vcard, contactText: contactText, csvCell: csvCell, parseCSV: parseCSV, stamp: stamp, cfgGet: cfgGet, cfgSet: cfgSet, isAdm: isAdm, meId: meId, sb: sb, MAX_FILE: MAX_FILE, PAGE: PAGE, ESTADOS: ESTADOS, ESTADO_COLOR: ESTADO_COLOR, CAMPOS_PRIV: CAMPOS_PRIV, CSV_COLS: CSV_COLS, useCore: useCore, h: h, p2: p2 } };
+  window.PB = { version: '3.0', core: core, useUnread: useUnread, _u: { full: full, initials: initials, norm: norm, fmtDate: fmtDate, fmtTime: fmtTime, fmtSize: fmtSize, normPhone: normPhone, phoneOk: phoneOk, emailOk: emailOk, listOf: listOf, download: download, uuid: uuid, safeName: safeName, errMsg: errMsg, vcard: vcard, contactText: contactText, csvCell: csvCell, parseCSV: parseCSV, stamp: stamp, cfgGet: cfgGet, cfgSet: cfgSet, isAdm: isAdm, meId: meId, sb: sb, MAX_FILE: MAX_FILE, PAGE: PAGE, ESTADOS: ESTADOS, ESTADO_COLOR: ESTADO_COLOR, CAMPOS_PRIV: CAMPOS_PRIV, CSV_COLS: CSV_COLS, useCore: useCore, h: h, p2: p2 } };
 })();

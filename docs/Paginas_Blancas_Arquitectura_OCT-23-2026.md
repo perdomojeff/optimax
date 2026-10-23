@@ -81,6 +81,23 @@ pb-push ──► servicio push del navegador (FCM / Mozilla / Apple) ──► 
 - Tablas: `pb_grupos`, `pb_grupo_miembros`, `pb_grupo_lecturas` (no leídos por persona).
 - Aviso «está escribiendo…» en chats directos y de grupo, con varios nombres cuando escriben varias personas.
 
+## 5.2 Gerencias y departamentos (lista cerrada)
+- Catálogo oficial en `pb_estructura` (9 gerencias y 34 departamentos, tomados del organigrama de SAI Group International). Lo leen todos los roles; solo se modifica con SQL.
+- En la ficha, «Gerencia» y «Departamento» son listas de selección (el departamento depende de la gerencia). No hay texto libre; además lo valida el servidor, así que ni la importación CSV ni el API aceptan valores fuera de la lista.
+- «Nivel en la organización» (miembro, líder de departamento, gerente de la gerencia) lo asigna solo administración. Un trabajador no puede ascenderse a sí mismo ni cambiar la gerencia o el departamento de un líder.
+- El directorio y la importación CSV incluyen la columna `gerencia`; el directorio tiene filtros por gerencia y departamento.
+
+## 5.3 Anuncios (comunicados informativos)
+- No son un chat: el destinatario los recibe en la pestaña «Anuncios» y como notificación, sin conversación en cadena. El remitente ve cuántos los han leído.
+- **Quién puede anunciar a quién** (calculado en el servidor, `pb_alcance()`):
+  - cualquier persona con supervisados: a sus supervisados directos e indirectos;
+  - gerente (nivel): a toda su gerencia; líder de departamento: a todo su departamento;
+  - rol `admin`: a todos los trabajadores activos con cuenta.
+- Audiencias predeterminadas en el selector (todos los que alcanza, mis supervisados, cada gerencia, cada departamento) y ajuste persona por persona.
+- El envío pasa por `pb_anuncio_enviar()`, que rechaza cualquier destinatario fuera del alcance del remitente. Las tablas `pb_anuncios` y `pb_anuncio_destinos` no aceptan inserciones directas; el destinatario solo puede marcar «leído».
+- Push: el mismo servicio `pb-push` envía un aviso por anuncio (actualizar la función con la versión nueva).
+- Instalación: ejecutar `supabase/paginas_blancas_v3.sql` (antes de publicar el código) y volver a publicar `pb-push`.
+
 ## 6. Siguientes fases propuestas
 1. «Visto por» en grupos y respuestas a mensajes específicos.
 4. Sincronización con directorio activo / SSO para crear y desactivar fichas automáticamente.
