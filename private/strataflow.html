@@ -5491,7 +5491,7 @@ function App() {
   var chip = store.mode === 'cloud' ? (store.canWrite ? [L('Guardado compartido activo', 'Shared saving on'), 'var(--good)'] : [window.OPT_ROLE ? L('Solo lectura (tu tiempo sí se edita)', 'Read only (your time log is editable)') : L('Solo lectura', 'Read only'), 'var(--warn)']) : store.mode === 'local' ? [L('Modo local: los datos no se guardan', 'Local mode: data is not saved'), 'var(--warn)'] : [L('Conectando…', 'Connecting…'), 'var(--muted)'];
 
   return h('div', { className: 'mx-auto w-full', style: { maxWidth: 1360, paddingInline: 16, paddingBlock: 20 } },
-    h('div', { className: 'eyebrow mb-3', style: { color: 'var(--accent)', letterSpacing: '.14em', textTransform: 'uppercase', paddingBottom: 6, borderBottom: '1px solid var(--line, rgba(128,128,128,.3))' } }, 'SAI GROUP INTERNATIONAL - DAEGCORP'),
+    h('div', { className: 'eyebrow mb-3', style: { color: 'var(--accent)', letterSpacing: '.14em', textTransform: 'uppercase', paddingBottom: 6, borderBottom: '1px solid var(--line, rgba(128,128,128,.3))' } }, 'DAEG · Dirección Acelerada de Estudios Geocientíficos'),
     h('header', { className: 'bn flex flex-wrap items-start justify-between gap-4 mb-4' },
       h('div', { className: 'bn-art', 'aria-hidden': 'true', dangerouslySetInnerHTML: { __html: BANNER_SVG } }),
       h('div', { style: { minWidth: 0, flex: '1 1 320px' } },
